@@ -612,6 +612,38 @@
   </div>
   <div class="toast" id="toast"></div>
 
+  <!-- Modal outcome de tour -->
+  <div class="modal-overlay" id="tour-outcome-modal">
+    <div class="modal" style="width:480px;">
+      <h2>Resultado del tour</h2>
+      <p style="color:var(--text-soft);font-size:13px;margin-bottom:12px;" id="to-lead-name">-</p>
+      <label style="display:block;font-size:12px;color:var(--text-soft);margin:10px 0 4px;">Status</label>
+      <select id="to-status" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:6px;background:var(--surface-alt);">
+        <option value="completed">✓ Completado</option>
+        <option value="no_show">✗ No se presentó</option>
+        <option value="cancelled">✗ Cancelado</option>
+        <option value="rescheduled">↻ Reagendar</option>
+        <option value="confirmed">✓ Confirmado (aún por hacerse)</option>
+      </select>
+      <label style="display:block;font-size:12px;color:var(--text-soft);margin:10px 0 4px;">Resultado / outcome</label>
+      <select id="to-outcome" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:6px;background:var(--surface-alt);">
+        <option value="">-</option>
+        <option value="interested">😊 Le interesó</option>
+        <option value="applied">📝 Aplicó</option>
+        <option value="signed">🎉 Firmó contrato</option>
+        <option value="not_interested">🤷 No le interesó</option>
+        <option value="needs_more_options">🔍 Quiere ver más opciones</option>
+        <option value="budget_issue">💰 Fuera de presupuesto</option>
+      </select>
+      <label style="display:block;font-size:12px;color:var(--text-soft);margin:10px 0 4px;">Notas internas</label>
+      <textarea id="to-notes" rows="3" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:6px;background:var(--surface-alt);font-family:inherit;"></textarea>
+      <div style="display:flex;gap:8px;margin-top:20px;justify-content:flex-end;">
+        <button class="btn btn-secondary" onclick="closeTourOutcomeModal()">Cancelar</button>
+        <button class="btn" onclick="saveTourOutcome()">Guardar resultado</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal editar campaña -->
   <div class="modal-overlay" id="edit-camp-modal">
     <div class="modal" id="edit-camp-modal-inner">
@@ -1191,20 +1223,39 @@
 
     window.openTourModal = function(tourId) {
       const t = toursCache.find(x => x.id === tourId)
-      if (!t) {
-        // Maybe en upcoming, pedirlo del backend
-        return
+      if (!t) return
+      document.getElementById("tour-outcome-modal").dataset.tourId = tourId
+      document.getElementById("to-lead-name").textContent =
+        (t.leads?.name || "Lead " + (t.leads?.sender_id || "")) +
+        " · " + new Date(t.scheduled_at).toLocaleString("es", { dateStyle: "short", timeStyle: "short" })
+      document.getElementById("to-status").value = t.status || "scheduled"
+      document.getElementById("to-outcome").value = t.outcome || ""
+      document.getElementById("to-notes").value = t.notes || ""
+      document.getElementById("tour-outcome-modal").classList.add("show")
+    }
+
+    window.closeTourOutcomeModal = function() {
+      document.getElementById("tour-outcome-modal").classList.remove("show")
+    }
+
+    window.saveTourOutcome = async function() {
+      const tourId = document.getElementById("tour-outcome-modal").dataset.tourId
+      const updates = {
+        status: document.getElementById("to-status").value,
+        outcome: document.getElementById("to-outcome").value || null,
+        notes: document.getElementById("to-notes").value || null,
       }
-      const currentStatus = t.status || "scheduled"
-      const newStatus = prompt("Status actual: " + currentStatus + "\n\nCambiar a: scheduled | confirmed | completed | no_show | cancelled | rescheduled\n(Dejar vacío para cancelar)", currentStatus)
-      if (!newStatus || newStatus === currentStatus) return
-      api("?action=update-tour", {
+      const r = await api("?action=update-tour", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: tourId, updates: { status: newStatus } }),
-      }).then(r => {
-        if (r.ok) { toast("Tour actualizado"); renderTours() }
-        else toast(r.error || "Error", true)
+        body: JSON.stringify({ id: Number(tourId), updates }),
       })
+      if (r.ok) {
+        toast("Resultado guardado")
+        closeTourOutcomeModal()
+        renderTours()
+      } else {
+        toast(r.error || "Error", true)
+      }
     }
 
     window.openNewPropModal = function() {

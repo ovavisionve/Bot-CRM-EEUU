@@ -217,14 +217,34 @@ Deno.serve(async (req) => {
               const parsed = Date.parse(leadActualizado.tour_date)
               if (!isNaN(parsed)) scheduled = new Date(parsed).toISOString()
 
-              await sb.from("tours").insert({
+              const { data: newTour } = await sb.from("tours").insert({
                 tenant_id: tenant.id,
                 lead_id: lead.id,
                 scheduled_at: scheduled,
                 status: "scheduled",
                 notes: `Auto-creado por el bot. Propiedad: ${leadActualizado.selected_property_name || "N/A"}. Fecha original: ${leadActualizado.tour_date}`,
-              })
+              }).select().single()
               console.log(`[webhook:POST][${tenant.slug}] Tour auto-creado para ${senderId}`)
+
+              // Sync con Google Calendar si está configurado
+              const calWebhook = Deno.env.get("CALENDAR_WEBHOOK_URL")
+              if (newTour && calWebhook) {
+                fetch(calWebhook, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    token: "ova_calendar_secret_2026",
+                    action: "upsert",
+                    tour_id: newTour.id,
+                    calendar_email: tenant.agent_email,
+                    title: `Tour: ${leadActualizado.name || senderId}`,
+                    description: `Tour agendado vía OVA REAL\nLead: ${leadActualizado.name || ""}\nIG: ${senderId}\nPropiedad: ${leadActualizado.selected_property_name || ""}\nNotas: ${leadActualizado.notes || ""}`,
+                    start: scheduled,
+                    duration_minutes: 30,
+                    status: "scheduled",
+                  }),
+                }).catch((e) => console.error("[calendar] sync failed:", e))
+              }
             } catch (err) {
               console.error("[webhook:POST] Error creando tour:", err)
             }
