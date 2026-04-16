@@ -3,101 +3,58 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Politica de Privacidad - OVA VISION</title>
+  <title>OVA VISION - Bot Instagram</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       max-width: 800px;
       margin: 0 auto;
-      padding: 40px 20px;
+      padding: 60px 20px;
       line-height: 1.6;
       color: #333;
+      background: #fafafa;
     }
-    h1 { color: #1a73e8; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; }
-    h2 { color: #333; margin-top: 30px; }
-    p { margin: 10px 0; }
-    ul { margin: 10px 0; padding-left: 30px; }
-    .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e0e0e0; color: #666; font-size: 14px; }
-    a { color: #1a73e8; }
+    h1 { color: #1a73e8; }
+    .card {
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      margin: 20px 0;
+    }
+    a { color: #1a73e8; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .button {
+      display: inline-block;
+      background: #1a73e8;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      margin-top: 12px;
+    }
+    .button:hover { background: #1557b0; text-decoration: none; }
+    .footer { margin-top: 40px; color: #666; font-size: 14px; text-align: center; }
   </style>
 </head>
 <body>
-  <h1>Politica de Privacidad</h1>
-  <p><strong>OVA VISION Agency</strong></p>
-  <p><strong>Ultima actualizacion:</strong> 16 de abril de 2026</p>
+  <h1>OVA VISION - Bot Instagram</h1>
+  <p>Plataforma de automatizacion de DMs de Instagram para agentes inmobiliarios.</p>
 
-  <h2>1. Introduccion</h2>
-  <p>OVA VISION Agency ("nosotros", "nuestro" o "la Empresa") opera la plataforma de automatizacion de mensajes para Instagram Direct Messages. Esta Politica de Privacidad explica como recopilamos, usamos, almacenamos y protegemos la informacion de los usuarios que interactuan con nuestros clientes a traves de nuestros servicios.</p>
+  <div class="card">
+    <h2>Dashboard CRM</h2>
+    <p>Ver leads, conversaciones y estado de cada uno en tiempo real.</p>
+    <a href="dashboard.html" class="button">Abrir Dashboard</a>
+  </div>
 
-  <h2>2. Informacion que recopilamos</h2>
-  <p>Cuando un usuario envia un mensaje directo a una cuenta de Instagram Business que utiliza nuestro servicio, podemos recopilar:</p>
-  <ul>
-    <li>Identificador de usuario de Instagram (Instagram Scoped ID)</li>
-    <li>Nombre de usuario (cuando es proporcionado por Instagram)</li>
-    <li>Contenido del mensaje enviado</li>
-    <li>Fecha y hora del mensaje</li>
-    <li>Metadatos del mensaje (tipo, estado de entrega)</li>
-  </ul>
-  <p>No recopilamos informacion personal identificable adicional como correo electronico, numero de telefono o direccion fisica, salvo que el usuario la proporcione voluntariamente en la conversacion.</p>
-
-  <h2>3. Como usamos la informacion</h2>
-  <p>Utilizamos la informacion recopilada para:</p>
-  <ul>
-    <li>Responder automaticamente a los mensajes recibidos</li>
-    <li>Mantener el historial de conversacion para continuidad del servicio</li>
-    <li>Registrar leads para nuestros clientes (agentes inmobiliarios)</li>
-    <li>Notificar al cliente sobre mensajes importantes</li>
-    <li>Mejorar la calidad de las respuestas automatizadas</li>
-  </ul>
-
-  <h2>4. Uso de inteligencia artificial</h2>
-  <p>Nuestro servicio utiliza modelos de lenguaje de inteligencia artificial para generar respuestas automaticas. Los mensajes pueden ser procesados por proveedores terceros de IA (como Anthropic, OpenAI u OpenRouter) bajo sus respectivas politicas de privacidad.</p>
-
-  <h2>5. Almacenamiento de datos</h2>
-  <p>Los datos se almacenan de forma segura en servidores de Supabase (PostgreSQL) ubicados en Estados Unidos. Aplicamos medidas tecnicas y organizativas razonables para proteger la informacion contra acceso no autorizado.</p>
-
-  <h2>6. Comparticion de datos</h2>
-  <p>No vendemos, alquilamos ni compartimos datos personales con terceros con fines comerciales. Compartimos datos unicamente con:</p>
-  <ul>
-    <li>El cliente (agente inmobiliario) cuya cuenta de Instagram recibio el mensaje</li>
-    <li>Proveedores de servicios tecnologicos necesarios para operar la plataforma (Meta, Supabase, OpenRouter)</li>
-    <li>Autoridades competentes cuando la ley lo requiera</li>
-  </ul>
-
-  <h2>7. Derechos del usuario</h2>
-  <p>Los usuarios tienen derecho a:</p>
-  <ul>
-    <li>Solicitar acceso a sus datos almacenados</li>
-    <li>Solicitar la rectificacion de datos incorrectos</li>
-    <li>Solicitar la eliminacion de sus datos (derecho al olvido)</li>
-    <li>Oponerse al procesamiento de sus datos</li>
-    <li>Dejar de recibir respuestas automatizadas en cualquier momento</li>
-  </ul>
-  <p>Para ejercer estos derechos, contactanos al correo indicado abajo.</p>
-
-  <h2>8. Retencion de datos</h2>
-  <p>Mantenemos los datos de conversaciones mientras el cliente mantenga activo su servicio con nosotros, o hasta que el usuario solicite su eliminacion. Los datos eliminados se purgan de nuestros sistemas en un plazo maximo de 30 dias.</p>
-
-  <h2>9. Plataforma Meta</h2>
-  <p>Cumplimos con la Politica de la Plataforma de Meta y los Terminos de la Plataforma de Instagram. Procesamos los datos de acuerdo con los permisos otorgados por cada cuenta de Instagram que se conecta a nuestro servicio.</p>
-
-  <h2>10. Menores de edad</h2>
-  <p>Nuestro servicio no esta dirigido a menores de 13 anos. No recopilamos conscientemente informacion de menores. Si detectamos que un menor nos ha proporcionado datos, los eliminaremos inmediatamente.</p>
-
-  <h2>11. Cambios en esta politica</h2>
-  <p>Podemos actualizar esta Politica de Privacidad periodicamente. La fecha de ultima actualizacion aparece al inicio del documento. Los cambios significativos seran notificados a traves de la cuenta de Instagram del cliente.</p>
-
-  <h2>12. Contacto</h2>
-  <p>Para consultas, solicitudes o quejas relacionadas con esta Politica de Privacidad:</p>
-  <ul>
-    <li><strong>Empresa:</strong> OVA VISION Agency</li>
-    <li><strong>Email:</strong> <a href="mailto:ovavision.ve@gmail.com">ovavision.ve@gmail.com</a></li>
-    <li><strong>WhatsApp:</strong> +58 424 578 1707</li>
-    <li><strong>Web:</strong> <a href="https://ovavisionagency.com">ovavisionagency.com</a></li>
-  </ul>
+  <div class="card">
+    <h2>Politica de Privacidad</h2>
+    <p>Documento legal sobre recopilacion y manejo de datos.</p>
+    <a href="privacy.html" class="button">Ver Politica</a>
+  </div>
 
   <div class="footer">
-    <p>&copy; 2026 OVA VISION Agency. Todos los derechos reservados.</p>
+    <p>&copy; 2026 OVA VISION Agency</p>
+    <p><a href="https://ovavisionagency.com">ovavisionagency.com</a> &middot; ovavision.ve@gmail.com</p>
   </div>
 </body>
 </html>

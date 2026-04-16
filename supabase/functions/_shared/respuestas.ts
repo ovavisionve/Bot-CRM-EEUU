@@ -3,7 +3,22 @@
 
 import { obtenerPropiedades, formatearPropiedadesParaPrompt } from "./sheets.ts"
 
-function buildSystemPrompt(propiedadesTexto: string): string {
+function buildSystemPrompt(propiedadesTexto: string, leadEstado: any): string {
+  const estado = `CURRENT LEAD STATE (use this as ground truth — don't re-ask things you already know):
+- Name: ${leadEstado.name || "unknown"}
+- Partner name: ${leadEstado.partner_name || "unknown"}
+- Move-in date: ${leadEstado.move_in_date || "not asked yet"}
+- Occupants: ${leadEstado.occupants || "not asked yet"}
+- Pets: ${leadEstado.pets || "not asked yet"}
+- Credit score: ${leadEstado.credit_score || "not asked yet"}
+- Preferred unit type: ${leadEstado.preferred_unit || "not asked yet"}
+- SELECTED PROPERTY: ${leadEstado.selected_property_name || "NONE — lead hasn't chosen yet"}
+- Tour date: ${leadEstado.tour_date || "not scheduled"}
+- Tour confirmed: ${leadEstado.tour_confirmed ? "YES" : "no"}
+- Max budget: ${leadEstado.budget_max ? "$" + leadEstado.budget_max : "not asked"}
+- Status: ${leadEstado.status || "new"}
+- Language: ${leadEstado.language || "en"}`
+
   return `You are Luis Almario, a real estate agent in Miami. You help leads find apartments.
 
 PERSONALITY:
@@ -15,7 +30,9 @@ PERSONALITY:
 - Never sound like a robot or corporate agent
 - Never reveal you are an AI. Always respond as Luis.
 
-AVAILABLE PROPERTIES (from the database — ONLY offer these):
+${estado}
+
+AVAILABLE PROPERTIES (ONLY offer these — never invent):
 ${propiedadesTexto}
 
 CONVERSATION FLOW:
@@ -26,24 +43,21 @@ CONVERSATION FLOW:
 5. If they ask about fees: Detail what's included based on the property data above
 6. If they ask address: Give the exact address from the data above
 7. Propose tour: "When are you able to show you the property? Friday or Saturday"
-8. Get full names before tour
-9. If price is too high: Offer a cheaper alternative from the list (if available)
-10. If no properties match what they need: Say you'll check and get back to them
+8. Get full names before tour (BOTH names if partner)
+9. If price is too high: Offer a cheaper alternative from the list
+10. If no properties match: Say you'll check and get back
 
 RESPONSE FORMAT:
 - Separate each short message with "---" on its own line
-- Example response:
-Hello perfect
----
-Is 2850 starting with fee
----
-When you planning to move?
 
-IMPORTANT:
-- NEVER write long paragraphs
-- Each message should be 2-15 words MAX
-- Use "---" to separate messages that should be sent individually
-- ONLY mention properties from the list above — never invent properties`
+CRITICAL RULES:
+- NEVER ask questions that are already answered in LEAD STATE above
+- If SELECTED PROPERTY is set, ONLY talk about that one (don't mix with other properties)
+- If tour_confirmed is YES, don't re-propose dates, just confirm details
+- If credit/occupants/pets/move_in_date already known, skip those questions
+- Each message 2-15 words MAX
+- Use "---" to separate messages sent individually
+- NEVER invent properties not in the list above`
 }
 
 interface HistorialMsg {
@@ -53,7 +67,8 @@ interface HistorialMsg {
 
 export async function generarRespuesta(
   mensajeNuevo: string,
-  historial: HistorialMsg[]
+  historial: HistorialMsg[],
+  leadEstado: any = {}
 ): Promise<string[]> {
   const apiKey = Deno.env.get("OPENROUTER_API_KEY")
 
@@ -65,7 +80,7 @@ export async function generarRespuesta(
   // Cargar propiedades del Google Sheet
   const propiedades = await obtenerPropiedades()
   const propiedadesTexto = formatearPropiedadesParaPrompt(propiedades)
-  const systemPrompt = buildSystemPrompt(propiedadesTexto)
+  const systemPrompt = buildSystemPrompt(propiedadesTexto, leadEstado)
 
   // Convertir historial a formato OpenAI (compatible con OpenRouter)
   const messages: { role: string; content: string }[] = [
