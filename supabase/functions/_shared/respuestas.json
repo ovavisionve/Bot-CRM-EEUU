@@ -1,0 +1,25 @@
+{
+  "palabras_clave": [
+    {
+      "keywords": ["precio", "costo", "cuánto", "cuanto", "cobran"],
+      "respuesta": "¡Hola! 👋 Gracias por escribirnos. Para ver nuestros precios entra aquí: [LINK]"
+    },
+    {
+      "keywords": ["pedido", "pedir", "ordenar", "quiero", "comprar"],
+      "respuesta": "¡Con gusto! 🛒 Puedes hacer tu pedido aquí: [LINK]"
+    },
+    {
+      "keywords": ["horario", "hora", "abren", "cierran", "disponible"],
+      "respuesta": "Atendemos de lunes a sábado de 10am a 8pm 🕐 ¿En qué más te podemos ayudar?"
+    },
+    {
+      "keywords": ["ubicacion", "ubicación", "dirección", "donde", "dónde"],
+      "respuesta": "Estamos en [DIRECCIÓN]. También hacemos delivery 🛵 ¿Quieres hacer un pedido?"
+    },
+    {
+      "keywords": ["hola", "buenas", "buenos", "hey", "hi"],
+      "respuesta": "¡Hola! 👋 Bienvenido/a. ¿En qué podemos ayudarte hoy?"
+    }
+  ],
+  "respuesta_default": "¡Hola! 😊 Gracias por escribirnos. Un momento, en breve te atendemos. También puedes escribirnos al [WHATSAPP_LINK]"
+}
