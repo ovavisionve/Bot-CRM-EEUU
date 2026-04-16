@@ -308,10 +308,148 @@ Deno.serve(async (req) => {
     if (!tid) return json({ agents: [] })
     const { data } = await supabase
       .from("user_profiles")
-      .select("id, email, name, role")
+      .select("id, email, name, role, phone, active, last_login_at, created_at")
       .eq("tenant_id", tid)
       .in("role", ["tenant_admin", "agent"])
+      .order("created_at", { ascending: true })
     return json({ agents: data || [] })
+  }
+
+  // ─── POST ?action=invite-agent — crear nuevo agente en el tenant ───
+  if (req.method === "POST" && action === "invite-agent") {
+    const { email, password, name, phone, role } = await req.json()
+    if (!user.tenant_id && !isSuperAdmin(user)) return json({ error: "Forbidden" }, 403)
+    const tid = isSuperAdmin(user)
+      ? (await supabase.from("tenants").select("id").eq("slug", (await req.clone().json()).tenant_slug).maybeSingle()).data?.id
+      : user.tenant_id
+    if (!tid) return json({ error: "No tenant" }, 400)
+
+    const { data: uData, error: uErr } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        tenant_id: tid,
+        role: role === "tenant_admin" ? "tenant_admin" : "agent",
+        name,
+      },
+    })
+    if (uErr) return json({ error: uErr.message }, 500)
+
+    // Update el profile con phone (el trigger solo copia role/tenant_id/name/email)
+    if (phone && uData.user) {
+      await supabase.from("user_profiles").update({ phone }).eq("id", uData.user.id)
+    }
+
+    // Enviar email de bienvenida
+    const gmailWebhook = Deno.env.get("GMAIL_WEBHOOK_URL")
+    if (gmailWebhook) {
+      const loginUrl = "https://ovavisionve.github.io/Bot-CRM-EEUU/login.html"
+      const html = `<!DOCTYPE html><html><body style="font-family:-apple-system,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+<div style="background:#1877f2;color:white;padding:24px;border-radius:12px 12px 0 0;"><h1 style="margin:0;">Bienvenido al equipo</h1></div>
+<div style="background:#f5f6f7;padding:24px;border-radius:0 0 12px 12px;">
+<p>Hola ${name || email},</p>
+<p>Fuiste agregado como <strong>${role === "tenant_admin" ? "administrador" : "agente"}</strong> al equipo.</p>
+<p><strong>Email:</strong> ${email}<br><strong>Contraseña:</strong> ${password}</p>
+<p><a href="${loginUrl}" style="background:#1877f2;color:white;padding:12px 24px;text-decoration:none;border-radius:6px;display:inline-block;">Iniciar sesión</a></p>
+</div></body></html>`
+      fetch(gmailWebhook, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: "ova_email_secret_2026", to: email, subject: "Invitación al equipo - OVA REAL", html }),
+      }).catch((e) => console.error("[invite-agent] email error:", e))
+    }
+
+    return json({ ok: true, user: { id: uData.user?.id, email: uData.user?.email } })
+  }
+
+  // ─── POST ?action=update-agent — cambiar rol/activo/nombre/phone ───
+  if (req.method === "POST" && action === "update-agent") {
+    const { id, updates } = await req.json()
+    const { data: target } = await supabase.from("user_profiles").select("tenant_id").eq("id", id).maybeSingle()
+    if (!target) return json({ error: "Agent not found" }, 404)
+    if (!canAccessTenant(user, target.tenant_id)) return json({ error: "Forbidden" }, 403)
+
+    const allowed: Record<string, unknown> = {}
+    for (const k of ["name", "phone", "role", "active"]) {
+      if (k in updates) allowed[k] = updates[k]
+    }
+    const { error } = await supabase.from("user_profiles")
+      .update({ ...allowed, updated_at: new Date().toISOString() }).eq("id", id)
+    if (error) return json({ error: error.message }, 500)
+    return json({ ok: true })
+  }
+
+  // ─── POST ?action=delete-agent — eliminar usuario ───
+  if (req.method === "POST" && action === "delete-agent") {
+    const { id } = await req.json()
+    const { data: target } = await supabase.from("user_profiles").select("tenant_id, role").eq("id", id).maybeSingle()
+    if (!target) return json({ error: "Agent not found" }, 404)
+    if (!canAccessTenant(user, target.tenant_id)) return json({ error: "Forbidden" }, 403)
+    if (target.role === "super_admin") return json({ error: "No podés borrar super admin" }, 403)
+
+    const { error } = await supabase.auth.admin.deleteUser(id)
+    if (error) return json({ error: error.message }, 500)
+    return json({ ok: true })
+  }
+
+  // ─── GET ?action=team-stats — stats de leads por agente (leaderboard) ───
+  if (action === "team-stats") {
+    let tid: string | null = null
+    const slug = url.searchParams.get("tenant")
+    if (isSuperAdmin(user) && slug) {
+      const { data } = await supabase.from("tenants").select("id").eq("slug", slug).maybeSingle()
+      tid = data?.id || null
+    } else { tid = user.tenant_id }
+    if (!tid) return json({ stats: [] })
+
+    const { data: agents } = await supabase.from("user_profiles")
+      .select("id, name, email").eq("tenant_id", tid).in("role", ["tenant_admin", "agent"])
+
+    const stats: any[] = []
+    for (const a of agents || []) {
+      const { count: total } = await supabase.from("leads")
+        .select("*", { count: "exact", head: true })
+        .eq("tenant_id", tid).eq("assigned_to", a.id)
+      const { count: qualified } = await supabase.from("leads")
+        .select("*", { count: "exact", head: true })
+        .eq("tenant_id", tid).eq("assigned_to", a.id)
+        .in("status", ["qualified", "touring", "tour_confirmed", "closed_won"])
+      const { count: won } = await supabase.from("leads")
+        .select("*", { count: "exact", head: true })
+        .eq("tenant_id", tid).eq("assigned_to", a.id).eq("status", "closed_won")
+      const { count: msgs } = await supabase.from("conversations")
+        .select("*", { count: "exact", head: true })
+        .eq("tenant_id", tid).eq("direction", "outbound").eq("sent_by", "agent")
+      stats.push({
+        agent: a,
+        total_leads: total || 0,
+        qualified: qualified || 0,
+        closed_won: won || 0,
+        agent_messages: msgs || 0,
+      })
+    }
+    stats.sort((a, b) => b.closed_won - a.closed_won)
+    return json({ stats })
+  }
+
+  // ─── POST ?action=update-branding — white-label ───
+  if (req.method === "POST" && action === "update-branding") {
+    const { logo_url, brand_color, accent_color, company_name, support_email } = await req.json()
+    const tid = user.tenant_id
+    if (!tid) return json({ error: "No tenant" }, 400)
+    if (!(await checkFeature(tid, "white_label"))) return json({ error: "Feature white_label no activa" }, 403)
+
+    const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
+    if (logo_url !== undefined) updates.logo_url = logo_url
+    if (brand_color !== undefined) updates.brand_color = brand_color
+    if (accent_color !== undefined) updates.accent_color = accent_color
+    if (company_name !== undefined) updates.company_name = company_name
+    if (support_email !== undefined) updates.support_email = support_email
+
+    const { error } = await supabase.from("tenants").update(updates).eq("id", tid)
+    if (error) return json({ error: error.message }, 500)
+    return json({ ok: true })
   }
 
   // ─── POST ?action=assign-lead — asignar lead a un agente ───
@@ -1063,12 +1201,12 @@ Return ONLY the description, no explanation. Include: the agent's name, area, pe
 
   if (!tenantId) return json({ tenant: null, leads: [], conversacion: [] })
 
-  // Leads del tenant
-  const { data: leads } = await supabase
-    .from("leads")
-    .select("*")
-    .eq("tenant_id", tenantId)
-    .order("updated_at", { ascending: false })
+  // Leads del tenant. Si el user es 'agent' (no admin), solo ve los asignados a el.
+  let leadsQuery = supabase.from("leads").select("*").eq("tenant_id", tenantId)
+  if (user.role === "agent") {
+    leadsQuery = leadsQuery.eq("assigned_to", user.id)
+  }
+  const { data: leads } = await leadsQuery.order("updated_at", { ascending: false })
 
   // Conversación del lead seleccionado
   let conversacion: any[] = []

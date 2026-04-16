@@ -342,9 +342,7 @@
       reports_export: "Exportar reportes (CSV/JSON)",
     }
     // Features que todavía no están implementadas en el código
-    const COMING_SOON = new Set([
-      "white_label",
-    ])
+    const COMING_SOON = new Set([])
 
     const meRes = await api("?action=me")
     if (meRes.user?.role !== "super_admin") {
