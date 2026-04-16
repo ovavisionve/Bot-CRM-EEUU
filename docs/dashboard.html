@@ -350,9 +350,28 @@
     currentUser = meRes.user
     currentTenant = meRes.tenant
 
-    // Si es super_admin, redirigir a admin
+    // Parámetro ?tenant=<slug> permite al super_admin "ver como" un cliente
+    const urlParams = new URLSearchParams(window.location.search)
+    const impersonateSlug = urlParams.get("tenant")
+
     if (currentUser?.role === "super_admin") {
-      window.location.href = "admin.html"
+      if (impersonateSlug) {
+        // Cargar el tenant impersonado para mostrar SU CRM
+        const r = await api("?tenant=" + encodeURIComponent(impersonateSlug))
+        if (r.tenant) {
+          currentTenant = r.tenant
+        }
+      } else {
+        // Sin tenant en la URL -> el super admin va al admin panel
+        window.location.href = "admin.html"
+      }
+    }
+
+    // Banner si el super admin está impersonando
+    if (currentUser?.role === "super_admin" && impersonateSlug) {
+      const chip = document.querySelector(".user-chip .who")
+      if (chip) chip.insertAdjacentHTML("afterbegin",
+        '<div style="background:#3b2f1e;color:#fbbf24;padding:3px 8px;border-radius:4px;font-size:10px;display:inline-block;margin-bottom:4px;">SUPER ADMIN - VIENDO COMO TENANT</div>')
     }
 
     document.getElementById("user-name").textContent = currentUser?.email || "Usuario"
