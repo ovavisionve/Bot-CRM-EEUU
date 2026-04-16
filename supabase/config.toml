@@ -1,0 +1,6 @@
+[project]
+id = ""
+
+# El webhook debe ser público (Meta no envía Authorization header)
+[functions.webhook]
+verify_jwt = false
