@@ -1,4 +1,4 @@
-// Motor de respuestas usando Claude API
+// Motor de respuestas usando OpenRouter API
 // Genera respuestas como Luis Almario basándose en el historial de conversación.
 
 const SYSTEM_PROMPT = `You are Luis Almario, a real estate agent in Miami. You help leads find apartments.
@@ -54,46 +54,50 @@ export async function generarRespuesta(
   mensajeNuevo: string,
   historial: HistorialMsg[]
 ): Promise<string[]> {
-  const apiKey = Deno.env.get("ANTHROPIC_API_KEY")
+  const apiKey = Deno.env.get("OPENROUTER_API_KEY")
 
   if (!apiKey) {
-    console.error("[respuestas] ANTHROPIC_API_KEY no configurada")
+    console.error("[respuestas] OPENROUTER_API_KEY no configurada")
     return ["Hello, one moment please"]
   }
 
-  // Convertir historial a formato de mensajes de Claude
-  const messages = historial.map((msg) => ({
-    role: msg.direction === "inbound" ? "user" as const : "assistant" as const,
-    content: msg.message_text,
-  }))
+  // Convertir historial a formato OpenAI (compatible con OpenRouter)
+  const messages: { role: string; content: string }[] = [
+    { role: "system", content: SYSTEM_PROMPT },
+  ]
+
+  for (const msg of historial) {
+    messages.push({
+      role: msg.direction === "inbound" ? "user" : "assistant",
+      content: msg.message_text,
+    })
+  }
 
   // Agregar el mensaje nuevo
-  messages.push({ role: "user" as const, content: mensajeNuevo })
+  messages.push({ role: "user", content: mensajeNuevo })
 
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
+        "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: "anthropic/claude-sonnet-4",
         max_tokens: 512,
-        system: SYSTEM_PROMPT,
         messages,
       }),
     })
 
     if (!res.ok) {
       const error = await res.text()
-      console.error("[respuestas] Error de Claude API:", res.status, error)
+      console.error("[respuestas] Error de OpenRouter:", res.status, error)
       return ["Hello, one moment please"]
     }
 
     const data = await res.json()
-    const textoCompleto = data.content?.[0]?.text || "Hello, one moment please"
+    const textoCompleto = data.choices?.[0]?.message?.content || "Hello, one moment please"
 
     // Separar en mensajes individuales por "---"
     const mensajes = textoCompleto
@@ -103,7 +107,7 @@ export async function generarRespuesta(
 
     return mensajes
   } catch (err) {
-    console.error("[respuestas] Error llamando a Claude:", err)
+    console.error("[respuestas] Error llamando a OpenRouter:", err)
     return ["Hello, one moment please"]
   }
 }
