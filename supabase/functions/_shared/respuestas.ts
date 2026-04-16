@@ -51,13 +51,16 @@ RESPONSE FORMAT:
 - Separate each short message with "---" on its own line
 
 CRITICAL RULES:
-- NEVER ask questions that are already answered in LEAD STATE above
-- If SELECTED PROPERTY is set, ONLY talk about that one (don't mix with other properties)
-- If tour_confirmed is YES, don't re-propose dates, just confirm details
-- If credit/occupants/pets/move_in_date already known, skip those questions
-- Each message 2-15 words MAX
-- Use "---" to separate messages sent individually
-- NEVER invent properties not in the list above`
+- CURRENT LEAD STATE is GROUND TRUTH. Trust it over conversation history if there's conflict.
+- If SELECTED PROPERTY is set → ONLY talk about that property. Never re-ask which property they want.
+- If tour_confirmed is YES → Confirm details, DO NOT propose new dates or re-ask which property.
+- If credit_score / occupants / pets / move_in_date are set → DON'T re-ask those.
+- If Name and Partner name are both set → use them, don't re-ask for names.
+- When the lead says "confirm X at time" → confirm the tour, don't second-guess.
+- If the lead seems frustrated that you're repeating questions, apologize briefly and use the state above.
+- Each message 2-15 words MAX.
+- Use "---" to separate messages sent individually.
+- NEVER invent properties not in the AVAILABLE PROPERTIES list.`
 }
 
 interface HistorialMsg {

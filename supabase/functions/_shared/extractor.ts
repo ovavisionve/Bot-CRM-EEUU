@@ -35,7 +35,7 @@ export async function extraerEstadoLead(
     .map((m) => `${m.direction === "inbound" ? "Lead" : "Agent"}: ${m.message_text}`)
     .join("\n")
 
-  const prompt = `Extract structured data from this real estate conversation.
+  const prompt = `Extract structured data from this real estate conversation. Be AGGRESSIVE about detecting confirmations in the LATEST message.
 
 CURRENT KNOWN STATE:
 ${JSON.stringify({
@@ -52,38 +52,44 @@ ${JSON.stringify({
     status: estadoActual.status,
   }, null, 2)}
 
-FULL CONVERSATION:
+FULL CONVERSATION (most recent at bottom):
 ${conversacion}
-Lead: ${mensajeNuevo}
+Lead (LATEST): ${mensajeNuevo}
 
-Extract ONLY fields that can be CONFIDENTLY determined from the conversation. If something was never mentioned or is ambiguous, leave it null.
+EXTRACTION RULES:
+- The LATEST message is the most important. If the lead mentions a property by name in their latest message, that IS their selected property.
+- "Confirm X", "at X", "the X one", "X is better" → clearly choosing property X
+- If lead mentions a specific date/time AND a property in same message → tour_confirmed = true
+- If the lead already confirmed names earlier, don't lose them
+- Don't downgrade fields: if status was "tour_confirmed" don't change it to "touring" unless user cancels
+- If the lead is frustrated with the bot repeating questions, that doesn't change any extracted data
 
-Return JSON with these fields (use null for unknown):
+Return JSON (use null ONLY if truly unknown, not if previously known):
 {
-  "name": "Lead full name if given, else null",
-  "partner_name": "Partner name if given, else null",
-  "move_in_date": "June 2026 / next month / etc if given, else null",
+  "name": "Lead full name",
+  "partner_name": "Partner name",
+  "move_in_date": "when moving",
   "occupants": "solo | pareja | familia",
   "pets": "none | normal | ESA",
-  "credit_score": number or null,
-  "preferred_unit": "1BR/1BA | 2BR/2BA | 3BR/2BA | studio | null",
-  "selected_property_name": "Exact name of property the lead chose from agent options (e.g. 'Coral Terrace 2BR/2BA', 'Flagami 2BR/1BA'). Null if not yet chosen",
-  "tour_date": "Friday 5pm / tomorrow 2pm / 2026-04-20 etc. Null if no tour scheduled",
-  "tour_confirmed": "true if tour is confirmed with specific date+time, false otherwise",
-  "language": "en | es (based on how lead writes)",
+  "credit_score": number,
+  "preferred_unit": "1BR/1BA | 2BR/2BA | 3BR/2BA | studio",
+  "selected_property_name": "EXACT property name lead chose (e.g. 'Flagami Budget 2BR/1BA', 'Coral Terrace 2BR/2BA'). Match the property name in the AVAILABLE PROPERTIES list exactly.",
+  "tour_date": "Friday 5pm / 2026-04-20 / etc",
+  "tour_confirmed": true/false,
+  "language": "en | es",
   "status": "new | contacted | qualified | disqualified | touring | tour_confirmed | closed_won | closed_lost",
-  "budget_max": "max monthly budget if mentioned, else null",
-  "notes": "brief relevant notes (preferences, concerns) - max 200 chars"
+  "budget_max": number,
+  "notes": "brief notes <200 chars"
 }
 
 STATUS RULES:
-- new: just started
-- contacted: greeted but no info yet
-- qualified: credit >= 620 AND occupants given
+- new: no info yet
+- contacted: greeted
+- qualified: credit >= 620 AND occupants known
 - disqualified: credit < 620
-- touring: tour date proposed but not confirmed
-- tour_confirmed: tour date + names given
-- closed_won/closed_lost: only if explicitly signed or rejected
+- touring: tour proposed but not fully confirmed
+- tour_confirmed: property + date + names all confirmed
+- closed_won/lost: explicit signed/rejected
 
 Return ONLY valid JSON, no markdown.`
 
