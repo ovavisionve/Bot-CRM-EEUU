@@ -5,3 +5,7 @@ verify_jwt = false
 # Dashboard público (proteger con auth propia más adelante)
 [functions.dashboard]
 verify_jwt = false
+
+# Cron de follow-ups (disparado por pg_cron cada hora)
+[functions.followup-cron]
+verify_jwt = false

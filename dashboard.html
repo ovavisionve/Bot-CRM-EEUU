@@ -24,21 +24,37 @@
       background: #141414;
     }
     .sidebar-header {
-      padding: 20px;
+      padding: 16px 20px;
       border-bottom: 1px solid #2a2a2a;
-      display: flex;
-      align-items: center;
-      gap: 12px;
     }
-    .sidebar-header h1 { font-size: 18px; font-weight: 700; color: #fff; }
+    .sidebar-header h1 { font-size: 16px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 10px; }
     .sidebar-header .logo {
-      width: 32px; height: 32px; background: #6366f1; border-radius: 8px;
+      width: 28px; height: 28px; background: #6366f1; border-radius: 6px;
       display: flex; align-items: center; justify-content: center;
-      font-weight: 700; font-size: 14px; color: #fff;
+      font-weight: 700; font-size: 12px; color: #fff;
+    }
+    .tenant-selector {
+      padding: 10px 20px;
+      background: #1a1a2e;
+      border-bottom: 1px solid #2a2a2a;
+      font-size: 12px;
+    }
+    .tenant-selector select {
+      width: 100%;
+      padding: 6px 8px;
+      background: #0f0f0f;
+      color: #e0e0e0;
+      border: 1px solid #333;
+      border-radius: 4px;
+      margin-top: 4px;
+      font-size: 13px;
     }
     .lead-count {
-      padding: 12px 20px; font-size: 12px; color: #888;
-      text-transform: uppercase; letter-spacing: 0.5px;
+      padding: 10px 20px;
+      font-size: 11px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
       border-bottom: 1px solid #2a2a2a;
     }
     .leads-list { flex: 1; overflow-y: auto; }
@@ -63,13 +79,18 @@
     .lead-time { font-size: 11px; color: #666; }
 
     /* Main */
-    .main {
-      flex: 1; display: flex; flex-direction: column; background: #0f0f0f;
-    }
+    .main { flex: 1; display: flex; flex-direction: column; background: #0f0f0f; }
     .main-header {
-      padding: 16px 24px; border-bottom: 1px solid #2a2a2a; background: #141414;
+      padding: 14px 24px; border-bottom: 1px solid #2a2a2a; background: #141414;
+      display: flex; align-items: center; justify-content: space-between;
     }
     .main-header h2 { font-size: 16px; font-weight: 600; }
+    .ai-badge {
+      padding: 4px 10px;
+      background: #1e3b2f; color: #34d399;
+      border-radius: 12px; font-size: 11px; font-weight: 600;
+    }
+    .ai-badge.paused { background: #3b2f1e; color: #fbbf24; }
     .lead-detail-bar {
       padding: 12px 24px; background: #1a1a2e;
       border-bottom: 1px solid #2a2a2a;
@@ -99,15 +120,12 @@
     }
     .outbound .msg-time { color: #a5b4fc; }
 
-    /* Empty */
     .empty-state {
       flex: 1; display: flex; flex-direction: column;
       align-items: center; justify-content: center; color: #555;
     }
     .empty-state .icon { font-size: 48px; margin-bottom: 16px; }
-    .empty-state p { font-size: 14px; }
 
-    /* Badges */
     .status-badge {
       font-size: 11px; padding: 2px 8px; border-radius: 10px;
       font-weight: 600; text-transform: uppercase;
@@ -117,13 +135,12 @@
     .status-qualified { background: #1e3b2f; color: #34d399; }
     .status-disqualified { background: #3b1e1e; color: #f87171; }
     .status-touring { background: #2e1e3b; color: #a78bfa; }
+    .status-tour_confirmed { background: #1e3b2f; color: #34d399; }
+    .status-closed_won { background: #1e3b1e; color: #4ade80; }
 
-    /* Scrollbar */
     ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
 
-    /* Loading */
     .loading { text-align: center; padding: 40px; color: #666; }
 
     @media (max-width: 768px) {
@@ -135,15 +152,20 @@
   <div class="app">
     <div class="sidebar">
       <div class="sidebar-header">
-        <div class="logo">OR</div>
-        <h1>OVA REAL</h1>
+        <h1><span class="logo">OR</span> OVA REAL</h1>
+      </div>
+      <div class="tenant-selector">
+        <span style="color:#888;">Cliente</span>
+        <select id="tenant-select" onchange="onTenantChange()">
+          <option>Cargando...</option>
+        </select>
       </div>
       <div class="lead-count" id="lead-count">Cargando...</div>
       <div class="leads-list" id="leads-list"></div>
     </div>
     <div class="main" id="main">
       <div class="empty-state">
-        <div class="icon">💬</div>
+        <div class="icon">OR</div>
         <p>Selecciona un lead para ver la conversacion</p>
       </div>
     </div>
@@ -152,40 +174,69 @@
   <script>
     const API = "https://vrfydffwczomvuoigwsm.supabase.co/functions/v1/dashboard";
     let selectedLead = null;
+    let selectedTenant = null;
     let leadsData = [];
+    let tenantsData = [];
+
+    async function fetchTenants() {
+      try {
+        const res = await fetch(API + "?tenants=1");
+        const data = await res.json();
+        tenantsData = data.tenants || [];
+        const sel = document.getElementById("tenant-select");
+        sel.innerHTML = tenantsData.map(t =>
+          '<option value="' + t.slug + '">' + esc(t.name) + ' (' + (t.instagram_handle || 'IG') + ')</option>'
+        ).join("");
+        if (tenantsData.length > 0 && !selectedTenant) {
+          selectedTenant = tenantsData[0].slug;
+          sel.value = selectedTenant;
+          fetchLeads();
+        }
+      } catch (err) {
+        document.getElementById("lead-count").textContent = "Error de conexion";
+      }
+    }
+
+    function onTenantChange() {
+      selectedTenant = document.getElementById("tenant-select").value;
+      selectedLead = null;
+      document.getElementById("main").innerHTML = '<div class="empty-state"><div class="icon">OR</div><p>Selecciona un lead</p></div>';
+      fetchLeads();
+    }
 
     async function fetchLeads() {
       try {
-        const res = await fetch(API);
+        const url = API + (selectedTenant ? "?tenant=" + selectedTenant : "");
+        const res = await fetch(url);
         const data = await res.json();
         leadsData = data.leads || [];
         renderLeads();
       } catch (err) {
-        document.getElementById("lead-count").textContent = "Error de conexion";
-        console.error(err);
+        document.getElementById("lead-count").textContent = "Error";
       }
     }
 
     async function selectLead(senderId) {
       selectedLead = senderId;
       renderLeads();
-
-      const main = document.getElementById("main");
-      main.innerHTML = '<div class="loading">Cargando conversacion...</div>';
-
+      document.getElementById("main").innerHTML = '<div class="loading">Cargando conversacion...</div>';
       try {
-        const res = await fetch(API + "?lead=" + senderId);
+        const res = await fetch(API + "?tenant=" + selectedTenant + "&lead=" + senderId);
         const data = await res.json();
         const lead = leadsData.find(l => l.sender_id === senderId);
         renderChat(lead, data.conversacion || []);
       } catch (err) {
-        main.innerHTML = '<div class="loading">Error cargando conversacion</div>';
+        document.getElementById("main").innerHTML = '<div class="loading">Error</div>';
       }
     }
 
     function renderLeads() {
       document.getElementById("lead-count").textContent = "Leads (" + leadsData.length + ")";
       const list = document.getElementById("leads-list");
+      if (leadsData.length === 0) {
+        list.innerHTML = '<div class="empty-state" style="padding:40px;"><p>Sin leads aun</p></div>';
+        return;
+      }
       list.innerHTML = leadsData.map(function(lead) {
         const isActive = lead.sender_id === selectedLead;
         const name = lead.name || "Lead " + lead.sender_id;
@@ -211,41 +262,48 @@
 
       let detailHTML = "";
       if (lead) {
+        const aiBadge = lead.ai_active === false
+          ? '<span class="ai-badge paused">Bot pausado</span>'
+          : '<span class="ai-badge">Bot activo</span>';
         detailHTML = '<div class="lead-detail-bar">';
         detailHTML += '<div class="detail-item"><strong>ID:</strong> ' + esc(lead.sender_id) + '</div>';
-        if (lead.name) detailHTML += '<div class="detail-item"><strong>Nombre:</strong> ' + esc(lead.name) + '</div>';
         detailHTML += '<div class="detail-item"><strong>Status:</strong> <span class="status-badge status-' + lead.status + '">' + lead.status + '</span></div>';
         detailHTML += '<div class="detail-item"><strong>Idioma:</strong> ' + (lead.language || "en") + '</div>';
         if (lead.credit_score) detailHTML += '<div class="detail-item"><strong>Credito:</strong> ' + lead.credit_score + '</div>';
         if (lead.pets) detailHTML += '<div class="detail-item"><strong>Mascotas:</strong> ' + lead.pets + '</div>';
         if (lead.occupants) detailHTML += '<div class="detail-item"><strong>Ocupantes:</strong> ' + lead.occupants + '</div>';
+        if (lead.selected_property_name) detailHTML += '<div class="detail-item"><strong>Propiedad:</strong> ' + esc(lead.selected_property_name) + '</div>';
+        if (lead.tour_date) detailHTML += '<div class="detail-item"><strong>Tour:</strong> ' + esc(lead.tour_date) + '</div>';
         detailHTML += '<div class="detail-item"><strong>Mensajes:</strong> ' + msgs.length + '</div>';
         detailHTML += '</div>';
+
+        main.innerHTML =
+          '<div class="main-header"><h2>' + esc(name) + '</h2>' + aiBadge + '</div>' +
+          detailHTML +
+          '<div class="chat" id="chat">' + msgs.map(renderMessage).join("") + '</div>';
+      } else {
+        main.innerHTML =
+          '<div class="main-header"><h2>' + esc(name) + '</h2></div>' +
+          '<div class="chat" id="chat">' + msgs.map(renderMessage).join("") + '</div>';
       }
 
-      let chatHTML = msgs.map(function(msg) {
-        const dir = msg.direction === "inbound" ? "inbound" : "outbound";
-        const time = new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        return '<div class="message ' + dir + '">' +
-          '<div class="bubble">' + esc(msg.message_text) +
-            '<span class="msg-time">' + time + '</span>' +
-          '</div></div>';
-      }).join("");
-
-      if (!chatHTML) chatHTML = '<div class="empty-state"><p>Sin mensajes</p></div>';
-
-      main.innerHTML =
-        '<div class="main-header"><h2>' + esc(name) + '</h2></div>' +
-        detailHTML +
-        '<div class="chat" id="chat">' + chatHTML + '</div>';
-
-      var chat = document.getElementById("chat");
+      const chat = document.getElementById("chat");
       if (chat) chat.scrollTop = chat.scrollHeight;
     }
 
+    function renderMessage(msg) {
+      const dir = msg.direction === "inbound" ? "inbound" : "outbound";
+      const time = new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+      return '<div class="message ' + dir + '">' +
+        '<div class="bubble">' + esc(msg.message_text) +
+          '<span class="msg-time">' + time + '</span>' +
+        '</div></div>';
+    }
+
     function esc(s) {
+      if (s === null || s === undefined) return "";
       var d = document.createElement("div");
-      d.textContent = s;
+      d.textContent = String(s);
       return d.innerHTML;
     }
 
@@ -260,11 +318,8 @@
       return Math.floor(hours / 24) + "d";
     }
 
-    // Cargar datos iniciales
-    fetchLeads();
-
-    // Auto-refresh cada 15 segundos
-    setInterval(fetchLeads, 15000);
+    fetchTenants();
+    setInterval(() => { if (selectedTenant) fetchLeads(); }, 15000);
   </script>
 </body>
 </html>
