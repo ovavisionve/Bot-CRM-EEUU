@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Planes - OVA REAL</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --brand: #1877f2;
+      --brand-dark: #166fe5;
+      --bg: #f0f2f5;
+      --surface: #ffffff;
+      --border: #e4e6eb;
+      --text: #1c1e21;
+      --text-soft: #65676b;
+      --success: #42b72a;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, sans-serif;
+      background: var(--bg); color: var(--text); min-height: 100vh;
+    }
+    header {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 16px 32px; display: flex; justify-content: space-between; align-items: center;
+    }
+    header .brand { font-weight: 700; display: flex; align-items: center; gap: 10px; }
+    header .logo {
+      width: 32px; height: 32px; background: var(--brand); border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      color: white; font-weight: 700; font-size: 13px;
+    }
+    header a { color: var(--text); text-decoration: none; }
+    .hero { text-align: center; padding: 60px 20px 40px; }
+    .hero h1 { font-size: 40px; margin-bottom: 12px; }
+    .hero p { font-size: 17px; color: var(--text-soft); max-width: 640px; margin: 0 auto; }
+
+    .plans { max-width: 1100px; margin: 0 auto; padding: 20px; display: grid;
+      grid-template-columns: repeat(3, 1fr); gap: 20px;
+    }
+    @media (max-width: 900px) { .plans { grid-template-columns: 1fr; } }
+    .plan {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 30px 26px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      display: flex; flex-direction: column;
+    }
+    .plan.featured { border: 2px solid var(--brand); position: relative; }
+    .plan.featured::before {
+      content: "RECOMENDADO"; position: absolute; top: -12px; left: 50%;
+      transform: translateX(-50%); background: var(--brand); color: white;
+      padding: 4px 14px; border-radius: 20px; font-size: 11px; font-weight: 700;
+    }
+    .plan h2 { font-size: 22px; margin-bottom: 4px; }
+    .plan .desc { color: var(--text-soft); font-size: 14px; min-height: 42px; }
+    .plan .price { font-size: 44px; font-weight: 700; margin: 18px 0 4px; }
+    .plan .price span { font-size: 14px; font-weight: 400; color: var(--text-soft); }
+    .plan ul { list-style: none; margin: 20px 0; padding: 0; flex: 1; }
+    .plan li {
+      padding: 8px 0; font-size: 14px; display: flex; align-items: start; gap: 8px;
+      color: var(--text);
+    }
+    .plan li.no { color: var(--text-soft); text-decoration: line-through; }
+    .plan li::before { content: "✓"; color: var(--success); font-weight: 700; flex-shrink: 0; }
+    .plan li.no::before { content: "✗"; color: var(--text-soft); }
+    .plan .btn {
+      width: 100%; padding: 14px; background: var(--brand); color: white;
+      border: none; border-radius: 10px; font-size: 15px; font-weight: 600;
+      cursor: pointer; text-decoration: none; display: block; text-align: center;
+      transition: background 0.15s;
+    }
+    .plan .btn:hover { background: var(--brand-dark); }
+    .plan .btn.secondary { background: var(--surface); color: var(--brand); border: 1px solid var(--brand); }
+    .footer { text-align: center; padding: 40px 20px; color: var(--text-soft); font-size: 13px; }
+    .footer a { color: var(--brand); }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="index.html" class="brand"><span class="logo">OR</span> OVA REAL</a>
+    <nav>
+      <a href="login.html" style="color: var(--brand); font-weight: 600;">Iniciar sesión →</a>
+    </nav>
+  </header>
+  <div class="hero">
+    <h1>Elegí tu plan</h1>
+    <p>Empezá en 30 minutos. Sin tarjeta para probar, cancelás cuando quieras.</p>
+  </div>
+  <div class="plans">
+    <div class="plan">
+      <h2>Starter</h2>
+      <div class="desc">Bot Instagram + CRM básico. Ideal para empezar.</div>
+      <div class="price">$97<span>/mes USD</span></div>
+      <ul>
+        <li>Bot de Instagram DMs</li>
+        <li>Respuestas con IA bilingüe</li>
+        <li>Memoria estructurada del lead</li>
+        <li>Propiedades desde Google Sheets</li>
+        <li>Acceso al CRM + editor manual</li>
+        <li>Email notificaciones al admin</li>
+        <li>Hasta 50 leads/mes</li>
+        <li class="no">Pipeline Kanban</li>
+        <li class="no">Analytics</li>
+        <li class="no">Drip campaigns</li>
+        <li class="no">Tour calendar</li>
+      </ul>
+      <a href="signup.html?plan=starter" class="btn">Empezar con Starter</a>
+    </div>
+
+    <div class="plan featured">
+      <h2>Pro</h2>
+      <div class="desc">Todo lo del Starter + automatizaciones pro.</div>
+      <div class="price">$197<span>/mes USD</span></div>
+      <ul>
+        <li>Todo lo de Starter</li>
+        <li>Pipeline Kanban drag-drop</li>
+        <li>Analytics + funnel de conversión</li>
+        <li>Drip campaigns personalizadas</li>
+        <li>Follow-ups automáticos 24/48/72h</li>
+        <li>Tour calendar + Google Calendar sync</li>
+        <li>Lead scoring automático 0-100</li>
+        <li>Voz del bot personalizada</li>
+        <li>Reportes CSV/JSON exportables</li>
+        <li>Hasta 500 leads/mes</li>
+        <li class="no">SMS bot (Twilio)</li>
+      </ul>
+      <a href="signup.html?plan=pro" class="btn">Empezar con Pro</a>
+    </div>
+
+    <div class="plan">
+      <h2>Agency</h2>
+      <div class="desc">Para agencias con múltiples agentes.</div>
+      <div class="price">$497<span>/mes USD</span></div>
+      <ul>
+        <li>Todo lo de Pro</li>
+        <li>SMS bot con Twilio</li>
+        <li>White-label (branding propio)</li>
+        <li>Hasta 10 sub-agentes</li>
+        <li>Leads ilimitados</li>
+        <li>Mensajes ilimitados</li>
+        <li>Propiedades ilimitadas</li>
+        <li>Soporte prioritario</li>
+        <li>Onboarding dedicado</li>
+      </ul>
+      <a href="signup.html?plan=agency" class="btn">Empezar con Agency</a>
+    </div>
+  </div>
+  <div class="footer">
+    OVA VISION Agency · <a href="https://ovavisionagency.com">ovavisionagency.com</a> · <a href="privacy.html">Privacidad</a>
+  </div>
+</body>
+</html>
