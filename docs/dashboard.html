@@ -1061,7 +1061,11 @@
       const r = await api("?action=handoff-queue&tenant=" + slug)
       const queueLeads = r.leads || []
 
-      let html = '<div class="handoff-view"><h2 style="font-size:22px;margin-bottom:14px;color:var(--text);">🚨 Leads esperando respuesta humana (' + queueLeads.length + ')</h2>'
+      let html = '<div class="handoff-view">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">' +
+          '<h2 style="font-size:22px;color:var(--text);">🚨 Leads esperando respuesta humana (' + queueLeads.length + ')</h2>' +
+          (queueLeads.length > 0 ? '<button class="btn" onclick="reactivateAllBots()">Reactivar bot en todos</button>' : '') +
+        '</div>'
 
       if (queueLeads.length === 0) {
         html += '<div style="background:var(--surface);padding:60px;text-align:center;color:var(--text-soft);border:1px solid var(--border);border-radius:10px;">' +
@@ -1099,6 +1103,23 @@
       })
       if (r.ok) { toast("Bot reactivado para este lead"); renderHandoffQueue() }
       else toast(r.error || "Error", true)
+    }
+
+    window.reactivateAllBots = async function() {
+      const slug = currentTenant?.slug || ""
+      const r = await api("?action=handoff-queue&tenant=" + slug)
+      const queueLeads = r.leads || []
+      if (!confirm("¿Reactivar el bot en los " + queueLeads.length + " leads pendientes?")) return
+      let ok = 0, fail = 0
+      for (const l of queueLeads) {
+        const r = await api("?action=toggle-ai", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sender_id: l.sender_id, ai_active: true }),
+        })
+        if (r.ok) ok++; else fail++
+      }
+      toast(ok + " reactivados" + (fail ? " · " + fail + " fallaron" : ""))
+      renderHandoffQueue()
     }
 
     function applyFeatureGating() {
