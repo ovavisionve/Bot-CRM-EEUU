@@ -1,13 +1,18 @@
-// Enviar mensajes por Instagram Graph API (Instagram Business Login flow)
+// Enviar mensajes por Instagram Business API
+// Usa el access_token del tenant (cada cliente tiene su propia cuenta de IG)
 
-// Endpoint del nuevo Instagram Business API (tokens IGAA)
 const IG_API_URL = "https://graph.instagram.com/v22.0/me/messages"
 
-export async function enviarMensaje(recipientId: string, texto: string) {
-  const token = Deno.env.get("INSTAGRAM_ACCESS_TOKEN")
+export async function enviarMensaje(
+  recipientId: string,
+  texto: string,
+  accessToken?: string | null
+) {
+  // Fallback a env var si no se pasa token (compatibilidad)
+  const token = accessToken || Deno.env.get("INSTAGRAM_ACCESS_TOKEN")
 
   if (!token) {
-    console.error("[instagram] INSTAGRAM_ACCESS_TOKEN no configurado")
+    console.error("[instagram] No hay access_token disponible (tenant ni env)")
     return
   }
 
@@ -15,7 +20,7 @@ export async function enviarMensaje(recipientId: string, texto: string) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${token}`,
+      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({
       recipient: { id: recipientId },
@@ -32,12 +37,14 @@ export async function enviarMensaje(recipientId: string, texto: string) {
   console.log("[instagram] Mensaje enviado a", recipientId, ":", texto.substring(0, 50))
 }
 
-// Enviar múltiples mensajes cortos con delay entre cada uno
-export async function enviarMensajesMultiples(recipientId: string, mensajes: string[]) {
+export async function enviarMensajesMultiples(
+  recipientId: string,
+  mensajes: string[],
+  accessToken?: string | null
+) {
   for (let i = 0; i < mensajes.length; i++) {
-    await enviarMensaje(recipientId, mensajes[i])
+    await enviarMensaje(recipientId, mensajes[i], accessToken)
 
-    // Pequeño delay entre mensajes (simula escritura)
     if (i < mensajes.length - 1) {
       await new Promise((resolve) => setTimeout(resolve, 1500))
     }

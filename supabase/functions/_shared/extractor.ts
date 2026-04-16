@@ -26,7 +26,8 @@ interface LeadEstado {
 export async function extraerEstadoLead(
   historial: HistorialMsg[],
   mensajeNuevo: string,
-  estadoActual: any
+  estadoActual: any,
+  _tenant?: any // para futuro: prompt customizado por tenant
 ): Promise<LeadEstado> {
   const apiKey = Deno.env.get("OPENROUTER_API_KEY")
   if (!apiKey) return {}

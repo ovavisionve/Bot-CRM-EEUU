@@ -1,9 +1,19 @@
 // Motor de respuestas usando OpenRouter API
-// Genera respuestas como Luis Almario basándose en el historial + propiedades del Sheet.
+// Genera respuestas usando la voz del agente configurado en el tenant.
 
 import { obtenerPropiedades, formatearPropiedadesParaPrompt } from "./sheets.ts"
+import type { Tenant, AgentConfig } from "./tenant.ts"
 
-function buildSystemPrompt(propiedadesTexto: string, leadEstado: any): string {
+function buildSystemPrompt(
+  propiedadesTexto: string,
+  leadEstado: any,
+  tenant: Partial<Tenant> | null,
+  agentConfig: AgentConfig | null
+): string {
+  const agentName = tenant?.agent_name || "Luis Almario"
+  const agentArea = "Miami"
+  const communicationStyle = agentConfig?.communication_style || "casual"
+  const agentVoice = agentConfig?.agent_voice || `${agentName}, a real estate agent in ${agentArea}`
   const estado = `CURRENT LEAD STATE (use this as ground truth — don't re-ask things you already know):
 - Name: ${leadEstado.name || "unknown"}
 - Partner name: ${leadEstado.partner_name || "unknown"}
@@ -19,16 +29,16 @@ function buildSystemPrompt(propiedadesTexto: string, leadEstado: any): string {
 - Status: ${leadEstado.status || "new"}
 - Language: ${leadEstado.language || "en"}`
 
-  return `You are Luis Almario, a real estate agent in Miami. You help leads find apartments.
+  return `You are ${agentVoice}. You help leads find apartments.
 
 PERSONALITY:
-- Friendly, casual, direct
+- Friendly, ${communicationStyle}, direct
 - Write in SHORT separate messages (2-4 words each), never long blocks
 - Use informal English with slight grammatical imperfections ("Is you alone", "we better price", "see you their")
 - Switch to Spanish if the lead writes in Spanish
 - Use 👍 emoji for confirmations only
 - Never sound like a robot or corporate agent
-- Never reveal you are an AI. Always respond as Luis.
+- Never reveal you are an AI. Always respond as ${agentName}.
 
 ${estado}
 
@@ -71,7 +81,9 @@ interface HistorialMsg {
 export async function generarRespuesta(
   mensajeNuevo: string,
   historial: HistorialMsg[],
-  leadEstado: any = {}
+  leadEstado: any = {},
+  tenant: Partial<Tenant> | null = null,
+  agentConfig: AgentConfig | null = null
 ): Promise<string[]> {
   const apiKey = Deno.env.get("OPENROUTER_API_KEY")
 
@@ -80,10 +92,10 @@ export async function generarRespuesta(
     return ["Hello, one moment please"]
   }
 
-  // Cargar propiedades del Google Sheet
-  const propiedades = await obtenerPropiedades()
+  // Cargar propiedades del Google Sheet del tenant
+  const propiedades = await obtenerPropiedades(tenant?.google_sheet_id)
   const propiedadesTexto = formatearPropiedadesParaPrompt(propiedades)
-  const systemPrompt = buildSystemPrompt(propiedadesTexto, leadEstado)
+  const systemPrompt = buildSystemPrompt(propiedadesTexto, leadEstado, tenant, agentConfig)
 
   // Convertir historial a formato OpenAI (compatible con OpenRouter)
   const messages: { role: string; content: string }[] = [

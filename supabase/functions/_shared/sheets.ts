@@ -15,8 +15,8 @@ interface Propiedad {
   disponible: string
 }
 
-// Cache para no pedir el Sheet en cada mensaje
-let cache: { data: Propiedad[]; timestamp: number } | null = null
+// Cache por tenant (sheetId) para no pedir el Sheet en cada mensaje
+const cacheMap: Map<string, { data: Propiedad[]; timestamp: number }> = new Map()
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutos
 
 function parsearCSV(csv: string): Propiedad[] {
@@ -76,40 +76,41 @@ function parsearLineaCSV(linea: string): string[] {
   return campos
 }
 
-export async function obtenerPropiedades(): Promise<Propiedad[]> {
-  // Revisar cache
-  if (cache && Date.now() - cache.timestamp < CACHE_TTL) {
-    return cache.data
-  }
+export async function obtenerPropiedades(sheetId?: string | null): Promise<Propiedad[]> {
+  // Fallback a env var si no se pasa sheetId (compatibilidad)
+  const id = sheetId || Deno.env.get("GOOGLE_SHEET_ID")
 
-  const sheetId = Deno.env.get("GOOGLE_SHEET_ID")
-
-  if (!sheetId) {
-    console.warn("[sheets] GOOGLE_SHEET_ID no configurado — usando propiedades vacías")
+  if (!id) {
+    console.warn("[sheets] No hay GOOGLE_SHEET_ID (tenant ni env)")
     return []
   }
 
+  // Cache por sheetId
+  const cached = cacheMap.get(id)
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.data
+  }
+
   try {
-    const url = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=0`
+    const url = `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=0`
     const res = await fetch(url)
 
     if (!res.ok) {
       console.error("[sheets] Error descargando Sheet:", res.status)
-      return cache?.data || []
+      return cached?.data || []
     }
 
     const csv = await res.text()
     const propiedades = parsearCSV(csv)
 
-    console.log("[sheets] Propiedades cargadas:", propiedades.length)
+    console.log(`[sheets] Propiedades cargadas (sheet=${id.substring(0, 8)}...):`, propiedades.length)
 
-    // Actualizar cache
-    cache = { data: propiedades, timestamp: Date.now() }
+    cacheMap.set(id, { data: propiedades, timestamp: Date.now() })
 
     return propiedades
   } catch (err) {
     console.error("[sheets] Error leyendo Sheet:", err)
-    return cache?.data || []
+    return cached?.data || []
   }
 }
 

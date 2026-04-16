@@ -1,19 +1,23 @@
 // Notifica al admin cuando hay eventos importantes
 // Envía email via Gmail (Apps Script webhook) + loggea link de WhatsApp
 
+import type { Tenant } from "./tenant.ts"
+
 interface NotificarData {
   senderId: string
   mensaje: string
   tipo?: string
   leadName?: string
+  tenant?: Partial<Tenant> | null
 }
 
 const EVENTOS_IMPORTANTES = ["tour_agendado", "calificado", "handoff", "disqualified"]
 const EMAIL_TOKEN = "ova_email_secret_2026"
 
 export async function notificarAdmin(data: NotificarData) {
-  const email = Deno.env.get("ADMIN_EMAIL") || "ovavision.ve@gmail.com"
-  const whatsapp = Deno.env.get("ADMIN_WHATSAPP") || "+584245781707"
+  // Preferir email del tenant, fallback a env var
+  const email = data.tenant?.agent_email || Deno.env.get("ADMIN_EMAIL") || "ovavision.ve@gmail.com"
+  const whatsapp = data.tenant?.agent_phone || Deno.env.get("ADMIN_WHATSAPP") || "+584245781707"
   const gmailWebhook = Deno.env.get("GMAIL_WEBHOOK_URL")
 
   // Link de WhatsApp con el mensaje pre-armado
