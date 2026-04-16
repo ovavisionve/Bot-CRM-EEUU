@@ -317,12 +317,14 @@ Deno.serve(async (req) => {
 
   // ─── POST ?action=invite-agent — crear nuevo agente en el tenant ───
   if (req.method === "POST" && action === "invite-agent") {
-    const { email, password, name, phone, role } = await req.json()
+    const body = await req.json()
+    const { email, password, name, phone, role } = body
     if (!user.tenant_id && !isSuperAdmin(user)) return json({ error: "Forbidden" }, 403)
     const tid = isSuperAdmin(user)
-      ? (await supabase.from("tenants").select("id").eq("slug", (await req.clone().json()).tenant_slug).maybeSingle()).data?.id
+      ? (await supabase.from("tenants").select("id").eq("slug", body.tenant_slug).maybeSingle()).data?.id
       : user.tenant_id
     if (!tid) return json({ error: "No tenant" }, 400)
+    if (!(await checkFeature(tid, "multi_agent"))) return json({ error: "Feature multi_agent no activa" }, 403)
 
     const { data: uData, error: uErr } = await supabase.auth.admin.createUser({
       email,

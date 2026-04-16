@@ -100,8 +100,8 @@ Deno.serve(async (req) => {
           const lead = await obtenerOCrearLead(senderId, tenant.id)
 
           // Auto-asignar lead nuevo a un agente (round-robin) si el tenant
-          // tiene multiples agents y el lead no esta asignado todavia.
-          if (!lead.assigned_to) {
+          // tiene la feature auto_routing activa y el lead no esta asignado.
+          if (!lead.assigned_to && tenant.features?.auto_routing) {
             try {
               const { createClient: cc3 } = await import("https://esm.sh/@supabase/supabase-js@2")
               const sb3 = cc3(
