@@ -37,8 +37,41 @@ Deno.serve(async (req) => {
 
   // ─── POST: Eventos de Instagram ───
   if (req.method === "POST") {
-    // TODO (paso 3): parsear body, detectar respuesta, enviar DM,
-    // guardar lead y notificar al admin.
+    try {
+      const body = await req.json()
+
+      console.log("[webhook:POST] Evento recibido:", JSON.stringify(body, null, 2))
+
+      // Verificar que es un evento de Instagram
+      if (body.object !== "instagram") {
+        console.warn("[webhook:POST] Evento ignorado — object:", body.object)
+        return new Response("Not Instagram", { status: 400 })
+      }
+
+      for (const entry of body.entry || []) {
+        console.log("[webhook:POST] Entry ID:", entry.id, "— Time:", entry.time)
+
+        for (const event of entry.messaging || []) {
+          const senderId = event.sender?.id
+          const mensaje = event.message?.text || ""
+
+          console.log("[webhook:POST] Mensaje de", senderId, ":", mensaje)
+
+          if (!mensaje) {
+            console.log("[webhook:POST] Evento sin texto (sticker, imagen, etc.) — ignorado")
+            continue
+          }
+
+          // TODO (paso 4-5): detectar respuesta y enviar DM
+          // TODO (paso 6): guardar lead en DB
+          // TODO (paso 7): notificar al admin
+        }
+      }
+    } catch (err) {
+      console.error("[webhook:POST] Error procesando evento:", err)
+    }
+
+    // Siempre responder 200 para que Meta no reintente
     return new Response("OK", { status: 200 })
   }
 
