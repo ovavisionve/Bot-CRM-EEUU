@@ -134,9 +134,23 @@
 
       if (data.user?.role === "super_admin") {
         window.location.href = "admin.html"
-      } else {
-        window.location.href = "dashboard.html"
+        return
       }
+
+      // Feature flag: dashboard_access — si está OFF, bloquear entrada
+      const features = data.tenant?.features || {}
+      if (features.dashboard_access === false) {
+        await supabase.auth.signOut()
+        const err = document.getElementById("error")
+        err.innerHTML = "Tu plan actual no incluye acceso al dashboard CRM.<br>Contactá a OVA VISION para activarlo: ovavision.ve@gmail.com"
+        err.classList.add("show")
+        const btn = document.getElementById("btn-login")
+        btn.disabled = false
+        btn.textContent = "Entrar"
+        return
+      }
+
+      window.location.href = "dashboard.html"
     }
   </script>
 </body>

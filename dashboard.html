@@ -187,6 +187,90 @@
     .toast.show { opacity: 1; }
     .toast.error { background: #dc2626; color: white; }
 
+    /* Top nav (Inbox | Pipeline | Config) */
+    .top-nav {
+      display: flex; gap: 4px;
+      padding: 10px 16px; background: #141414;
+      border-bottom: 1px solid #2a2a2a;
+      align-items: center;
+    }
+    .nav-btn {
+      padding: 8px 16px; background: transparent;
+      border: none; color: #888; cursor: pointer;
+      font-size: 13px; font-weight: 500;
+      border-radius: 6px; transition: all 0.15s;
+    }
+    .nav-btn:hover { background: #1e1e1e; color: #e0e0e0; }
+    .nav-btn.active { background: #6366f1; color: white; }
+    .nav-btn .count {
+      font-size: 11px; margin-left: 6px; opacity: 0.8;
+    }
+
+    /* Kanban Pipeline */
+    .kanban {
+      flex: 1; overflow-x: auto; overflow-y: hidden;
+      display: flex; gap: 16px; padding: 16px;
+      background: #0f0f0f;
+    }
+    .kanban-col {
+      flex-shrink: 0; width: 280px;
+      display: flex; flex-direction: column;
+      background: #141414; border-radius: 10px;
+      border: 1px solid #2a2a2a;
+      max-height: 100%;
+    }
+    .kanban-col.drag-over {
+      border-color: #6366f1;
+      background: #1e1e3a;
+    }
+    .kanban-col-header {
+      padding: 14px 16px; border-bottom: 1px solid #2a2a2a;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .kanban-col-header h3 {
+      font-size: 12px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.5px; color: #e0e0e0;
+    }
+    .kanban-col-header .col-count {
+      background: #2a2a2a; color: #aaa; font-size: 11px;
+      padding: 2px 8px; border-radius: 10px; font-weight: 600;
+    }
+    .kanban-cards {
+      flex: 1; overflow-y: auto; padding: 8px;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .kanban-card {
+      background: #1a1a1a; border: 1px solid #2a2a2a;
+      border-radius: 8px; padding: 12px; cursor: grab;
+      transition: all 0.15s;
+    }
+    .kanban-card:hover { border-color: #444; }
+    .kanban-card.dragging { opacity: 0.4; cursor: grabbing; }
+    .kanban-card .card-name {
+      font-size: 14px; font-weight: 600; margin-bottom: 4px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .kanban-card .card-meta {
+      font-size: 11px; color: #888;
+      display: flex; justify-content: space-between; align-items: center;
+      margin-top: 6px;
+    }
+    .kanban-card .card-property {
+      font-size: 11px; color: #a5b4fc; margin-top: 4px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    /* Columnas específicas por status */
+    .kanban-col[data-status="new"] .kanban-col-header { border-top: 3px solid #60a5fa; border-radius: 10px 10px 0 0; }
+    .kanban-col[data-status="contacted"] .kanban-col-header { border-top: 3px solid #fbbf24; border-radius: 10px 10px 0 0; }
+    .kanban-col[data-status="qualified"] .kanban-col-header { border-top: 3px solid #34d399; border-radius: 10px 10px 0 0; }
+    .kanban-col[data-status="touring"] .kanban-col-header { border-top: 3px solid #a78bfa; border-radius: 10px 10px 0 0; }
+    .kanban-col[data-status="tour_confirmed"] .kanban-col-header { border-top: 3px solid #34d399; border-radius: 10px 10px 0 0; }
+    .kanban-col[data-status="closed_won"] .kanban-col-header { border-top: 3px solid #4ade80; border-radius: 10px 10px 0 0; }
+    .kanban-col[data-status="disqualified"] .kanban-col-header { border-top: 3px solid #f87171; border-radius: 10px 10px 0 0; }
+
+    .main.has-topnav { display: flex; flex-direction: column; }
+
     @media (max-width: 768px) {
       .sidebar { width: 100%; }
     }
@@ -213,10 +297,16 @@
         <div style="padding:40px; text-align:center; color:#666;">Cargando...</div>
       </div>
     </div>
-    <div class="main" id="main">
-      <div class="empty-state">
-        <div class="icon-box">CRM</div>
-        <p>Selecciona un lead</p>
+    <div class="main has-topnav" id="main">
+      <div class="top-nav">
+        <button class="nav-btn active" data-main-view="inbox" onclick="setMainView('inbox')">📥 Inbox</button>
+        <button class="nav-btn" data-main-view="pipeline" onclick="setMainView('pipeline')">📊 Pipeline</button>
+      </div>
+      <div id="main-content" style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
+        <div class="empty-state">
+          <div class="icon-box">CRM</div>
+          <p>Selecciona un lead o cambia a Pipeline</p>
+        </div>
       </div>
     </div>
   </div>
@@ -242,16 +332,46 @@
     let currentTenant = null
     let selectedLead = null
     let leads = []
-    let currentView = "leads"
+    let currentView = "leads"       // sidebar tab: leads | config
+    let currentMainView = "inbox"   // main area: inbox | pipeline
+
+    const STATUS_COLS = [
+      { key: "new", label: "Nuevo" },
+      { key: "contacted", label: "Contactado" },
+      { key: "qualified", label: "Calificado" },
+      { key: "touring", label: "Tour propuesto" },
+      { key: "tour_confirmed", label: "Tour confirmado" },
+      { key: "closed_won", label: "Cerrado ganado" },
+      { key: "disqualified", label: "Descalificado" },
+    ]
 
     // Inicializar
     const meRes = await api("?action=me")
     currentUser = meRes.user
     currentTenant = meRes.tenant
 
-    // Si es super_admin, redirigir a admin
+    // Parámetro ?tenant=<slug> permite al super_admin "ver como" un cliente
+    const urlParams = new URLSearchParams(window.location.search)
+    const impersonateSlug = urlParams.get("tenant")
+
     if (currentUser?.role === "super_admin") {
-      window.location.href = "admin.html"
+      if (impersonateSlug) {
+        // Cargar el tenant impersonado para mostrar SU CRM
+        const r = await api("?tenant=" + encodeURIComponent(impersonateSlug))
+        if (r.tenant) {
+          currentTenant = r.tenant
+        }
+      } else {
+        // Sin tenant en la URL -> el super admin va al admin panel
+        window.location.href = "admin.html"
+      }
+    }
+
+    // Banner si el super admin está impersonando
+    if (currentUser?.role === "super_admin" && impersonateSlug) {
+      const chip = document.querySelector(".user-chip .who")
+      if (chip) chip.insertAdjacentHTML("afterbegin",
+        '<div style="background:#3b2f1e;color:#fbbf24;padding:3px 8px;border-radius:4px;font-size:10px;display:inline-block;margin-bottom:4px;">SUPER ADMIN - VIENDO COMO TENANT</div>')
     }
 
     document.getElementById("user-name").textContent = currentUser?.email || "Usuario"
@@ -262,8 +382,121 @@
     window.setView = function(view) {
       currentView = view
       document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.view === view))
-      if (view === "leads") renderLeadsList()
-      else renderConfig()
+      const topNav = document.querySelector(".top-nav")
+      if (view === "leads") {
+        if (topNav) topNav.style.display = "flex"
+        renderLeadsList()
+        renderMainArea()
+      } else {
+        if (topNav) topNav.style.display = "none"
+        renderConfig()
+      }
+    }
+
+    window.setMainView = function(view) {
+      currentMainView = view
+      document.querySelectorAll(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.mainView === view))
+      renderMainArea()
+    }
+
+    function renderMainArea() {
+      if (currentView !== "leads") return // config se renderiza aparte
+      if (currentMainView === "pipeline") {
+        renderPipeline()
+      } else {
+        // inbox
+        if (selectedLead) {
+          selectLead(selectedLead, /*skipRefresh*/ true)
+        } else {
+          document.getElementById("main-content").innerHTML =
+            '<div class="empty-state"><div class="icon-box">CRM</div><p>Selecciona un lead o cambia a Pipeline</p></div>'
+        }
+      }
+    }
+
+    function renderPipeline() {
+      const mc = document.getElementById("main-content")
+      // Agrupar leads por status
+      const byStatus = {}
+      for (const col of STATUS_COLS) byStatus[col.key] = []
+      for (const l of leads) {
+        const s = l.status || "new"
+        if (byStatus[s]) byStatus[s].push(l)
+        else byStatus["new"].push(l)
+      }
+      let html = '<div class="kanban" id="kanban">'
+      for (const col of STATUS_COLS) {
+        const colLeads = byStatus[col.key] || []
+        html += '<div class="kanban-col" data-status="' + col.key + '" ondragover="kanbanDragOver(event)" ondragleave="kanbanDragLeave(event)" ondrop="kanbanDrop(event, \'' + col.key + '\')">'
+        html += '<div class="kanban-col-header"><h3>' + col.label + '</h3><span class="col-count">' + colLeads.length + '</span></div>'
+        html += '<div class="kanban-cards">'
+        for (const l of colLeads) {
+          const name = l.name || "Lead " + l.sender_id
+          html += '<div class="kanban-card" draggable="true" data-sender-id="' + l.sender_id + '"' +
+            ' ondragstart="kanbanDragStart(event, \'' + l.sender_id + '\')"' +
+            ' ondragend="kanbanDragEnd(event)"' +
+            ' onclick="openLeadFromKanban(\'' + l.sender_id + '\')">' +
+            '<div class="card-name">' + esc(name) + '</div>'
+          if (l.selected_property_name) html += '<div class="card-property">' + esc(l.selected_property_name) + '</div>'
+          html += '<div class="card-meta">'
+          html += '<span>' + (l.language || "en") + (l.credit_score ? ' · ' + l.credit_score + ' crédito' : '') + '</span>'
+          html += '<span>' + getTimeAgo(l.updated_at || l.created_at) + '</span>'
+          html += '</div></div>'
+        }
+        if (colLeads.length === 0) {
+          html += '<div style="padding:20px; text-align:center; color:#555; font-size:12px;">Sin leads</div>'
+        }
+        html += '</div></div>'
+      }
+      html += '</div>'
+      mc.innerHTML = html
+    }
+
+    window.kanbanDragStart = function(ev, senderId) {
+      ev.dataTransfer.setData("text/plain", senderId)
+      ev.target.classList.add("dragging")
+    }
+    window.kanbanDragEnd = function(ev) {
+      ev.target.classList.remove("dragging")
+    }
+    window.kanbanDragOver = function(ev) {
+      ev.preventDefault()
+      ev.currentTarget.classList.add("drag-over")
+    }
+    window.kanbanDragLeave = function(ev) {
+      ev.currentTarget.classList.remove("drag-over")
+    }
+    window.kanbanDrop = async function(ev, newStatus) {
+      ev.preventDefault()
+      ev.currentTarget.classList.remove("drag-over")
+      const senderId = ev.dataTransfer.getData("text/plain")
+      if (!senderId) return
+      // Actualizar local inmediatamente (optimista)
+      const lead = leads.find(l => l.sender_id === senderId)
+      if (!lead || lead.status === newStatus) return
+      const oldStatus = lead.status
+      lead.status = newStatus
+      renderPipeline()
+      // Persistir en DB
+      const r = await api("?action=bulk-update-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sender_ids: [senderId], new_status: newStatus }),
+      })
+      if (r.ok) {
+        toast("Movido a " + newStatus)
+      } else {
+        lead.status = oldStatus
+        renderPipeline()
+        toast(r.error || "Error", true)
+      }
+    }
+
+    window.openLeadFromKanban = function(senderId) {
+      selectedLead = senderId
+      currentMainView = "inbox"
+      document.querySelectorAll(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.mainView === "inbox"))
+      selectLead(senderId)
     }
 
     window.logout = async function() {
@@ -287,6 +520,8 @@
       const data = await api("?tenant=" + (currentTenant?.slug || ""))
       leads = data.leads || []
       renderLeadsList()
+      // Si estás en pipeline, re-renderizar para actualizar columnas
+      if (currentView === "leads" && currentMainView === "pipeline") renderPipeline()
     }
 
     function renderLeadsList() {
@@ -315,17 +550,21 @@
       }).join("")
     }
 
-    async function selectLead(senderId) {
+    async function selectLead(senderId, skipRefresh) {
       selectedLead = senderId
+      currentMainView = "inbox"
+      document.querySelectorAll(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.mainView === "inbox"))
       renderLeadsList()
-      document.getElementById("main").innerHTML = '<div class="empty-state"><div class="icon-box">CRM</div><p>Cargando...</p></div>'
+      if (!skipRefresh) {
+        document.getElementById("main-content").innerHTML = '<div class="empty-state"><div class="icon-box">CRM</div><p>Cargando...</p></div>'
+      }
       const data = await api("?tenant=" + (currentTenant?.slug || "") + "&lead=" + senderId)
       const lead = leads.find(l => l.sender_id === senderId)
       renderChat(lead, data.conversacion || [])
     }
 
     function renderChat(lead, msgs) {
-      const main = document.getElementById("main")
+      const main = document.getElementById("main-content")
       if (!lead) return
       const name = lead.name || "Lead " + lead.sender_id
       const aiBadge = lead.ai_active === false
@@ -373,12 +612,20 @@
       } else toast(r.error || "Error", true)
     }
 
-    function renderConfig() {
+    async function renderConfig() {
       const content = document.getElementById("sidebar-content")
       content.innerHTML = '<div style="padding:20px; color:#888; font-size:13px;">Mirá los detalles del panel principal →</div>'
 
       const t = currentTenant || {}
       const f = t.features || {}
+
+      // Pre-cargar agent_voice si la feature está ON
+      if (f.custom_bot_voice) {
+        try {
+          const cfg = await api("?action=agent-config")
+          window._agentVoiceValue = cfg.config?.agent_voice || ""
+        } catch (e) { window._agentVoiceValue = "" }
+      }
       const featureKeys = {
         instagram_bot: "Bot Instagram",
         ai_responses: "Respuestas IA",
@@ -400,7 +647,7 @@
           featureKeys[k] + '<span>' + (on ? "ON" : "OFF") + '</span></div>'
       }
 
-      document.getElementById("main").innerHTML =
+      document.getElementById("main-content").innerHTML =
         '<div class="config-view">' +
           '<h2>Configuración de ' + esc(t.name || "") + '</h2>' +
           '<h3>Datos del agente</h3>' +
@@ -419,10 +666,26 @@
           '</select></div>' +
           '<div class="config-row"><label>Google Sheet ID (propiedades)</label><input id="c-sheet-id" value="' + esc(t.google_sheet_id || "") + '"/></div>' +
           '<button class="btn" onclick="saveConfig()">Guardar cambios</button>' +
+          (f.custom_bot_voice
+            ? '<h3>Voz del bot</h3>' +
+              '<div class="config-row"><label>Descripción de la voz/personalidad del bot (se inyecta en el prompt)</label>' +
+              '<textarea id="c-agent-voice" rows="4" placeholder="Ej: Luis Almario, real estate agent en Miami con 10 años de experiencia, casual, directo, bilingue">' + esc(window._agentVoiceValue || "") + '</textarea></div>' +
+              '<button class="btn" onclick="saveAgentVoice()">Guardar voz</button>'
+            : '') +
           '<h3>Features contratados</h3>' +
           '<p style="font-size:13px; color:#888; margin-bottom:12px;">Estos los gestiona OVA VISION. Si necesitas activar algo, avisanos.</p>' +
           '<div class="feature-list">' + featuresHtml + '</div>' +
         '</div>'
+    }
+
+    window.saveAgentVoice = async function() {
+      const voice = document.getElementById("c-agent-voice").value
+      const r = await api("?action=update-agent-config", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: currentTenant.slug, updates: { agent_voice: voice } }),
+      })
+      if (r.ok) { window._agentVoiceValue = voice; toast("Voz del bot guardada") }
+      else toast(r.error || "Error", true)
     }
 
     async function saveConfig() {

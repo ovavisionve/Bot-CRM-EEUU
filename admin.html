@@ -85,6 +85,13 @@
     }
     .feature-toggle input[type="checkbox"]:checked { background: #34d399; }
     .feature-toggle input[type="checkbox"]:checked::before { left: 18px; }
+    .feature-toggle.coming-soon { opacity: 0.55; }
+    .feature-toggle.coming-soon input[type="checkbox"] { cursor: not-allowed; }
+    .coming-badge {
+      font-size: 9px; background: #3b2f1e; color: #fbbf24;
+      padding: 2px 6px; border-radius: 4px; margin-left: 6px;
+      font-weight: 700; letter-spacing: 0.5px;
+    }
 
     .feature-category {
       font-size: 11px; color: #6366f1; text-transform: uppercase;
@@ -226,6 +233,11 @@
       tour_calendar: "Calendario tours",
       custom_bot_voice: "Voz custom del bot",
     }
+    // Features que todavía no están implementadas en el código
+    const COMING_SOON = new Set([
+      "sms_bot", "drip_campaigns", "lead_scoring",
+      "analytics", "white_label", "tour_calendar",
+    ])
 
     const meRes = await api("?action=me")
     if (meRes.user?.role !== "super_admin") {
@@ -287,8 +299,12 @@
         featuresHTML += '<div class="feature-category">' + cat + '</div><div class="features-grid">'
         for (const key of FEATURE_CATEGORIES[cat]) {
           const checked = features[key] ? "checked" : ""
-          featuresHTML += '<div class="feature-toggle"><label for="' + t.slug + '-' + key + '">' + FEATURE_LABELS[key] + '</label>' +
-            '<input type="checkbox" id="' + t.slug + '-' + key + '" data-slug="' + t.slug + '" data-feature="' + key + '" ' + checked + ' /></div>'
+          const isSoon = COMING_SOON.has(key)
+          const soonClass = isSoon ? " coming-soon" : ""
+          const soonBadge = isSoon ? '<span class="coming-badge">PRÓXIMAMENTE</span>' : ''
+          const disabledAttr = isSoon ? " disabled" : ""
+          featuresHTML += '<div class="feature-toggle' + soonClass + '"><label for="' + t.slug + '-' + key + '">' + FEATURE_LABELS[key] + soonBadge + '</label>' +
+            '<input type="checkbox" id="' + t.slug + '-' + key + '" data-slug="' + t.slug + '" data-feature="' + key + '" ' + checked + disabledAttr + ' /></div>'
         }
         featuresHTML += '</div>'
       }

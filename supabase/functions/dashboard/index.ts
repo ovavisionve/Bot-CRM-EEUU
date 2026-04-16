@@ -140,6 +140,45 @@ Deno.serve(async (req) => {
     return json({ ok: true, user: { id: data.user?.id, email: data.user?.email } })
   }
 
+  // ─── POST ?action=update-agent-config — editar voz/estilo del bot ───
+  if (req.method === "POST" && action === "update-agent-config") {
+    const { slug, updates } = await req.json()
+    const { data: t } = await supabase.from("tenants").select("id, features").eq("slug", slug).maybeSingle()
+    if (!t) return json({ error: "Tenant not found" }, 404)
+    if (!canAccessTenant(user, t.id)) return json({ error: "Forbidden" }, 403)
+
+    // custom_bot_voice gatea si el tenant puede editar agent_voice
+    if (!isSuperAdmin(user) && !t.features?.custom_bot_voice) {
+      return json({ error: "Feature custom_bot_voice no está activa" }, 403)
+    }
+
+    const allowed: Record<string, unknown> = {}
+    const whitelist = ["agent_voice", "communication_style", "preferred_language", "auto_switch_language"]
+    for (const k of whitelist) if (k in updates) allowed[k] = updates[k]
+
+    const { error } = await supabase
+      .from("agent_configs")
+      .update({ ...allowed, updated_at: new Date().toISOString() })
+      .eq("tenant_id", t.id)
+    if (error) return json({ error: error.message }, 500)
+    return json({ ok: true })
+  }
+
+  // ─── GET ?action=agent-config — leer config del bot del tenant ───
+  if (action === "agent-config") {
+    const slug = url.searchParams.get("tenant")
+    let tid: string | null = null
+    if (slug && isSuperAdmin(user)) {
+      const { data: t } = await supabase.from("tenants").select("id").eq("slug", slug).maybeSingle()
+      tid = t?.id || null
+    } else {
+      tid = user.tenant_id
+    }
+    if (!tid) return json({ config: null })
+    const { data } = await supabase.from("agent_configs").select("*").eq("tenant_id", tid).maybeSingle()
+    return json({ config: data })
+  }
+
   // ─── POST ?action=update-tenant — super admin o propio tenant_admin ───
   if (req.method === "POST" && action === "update-tenant") {
     const { slug, updates } = await req.json()
@@ -176,7 +215,6 @@ Deno.serve(async (req) => {
   // ─── POST ?action=toggle-ai — tenant_admin pausa/activa bot para un lead ───
   if (req.method === "POST" && action === "toggle-ai") {
     const { sender_id, ai_active } = await req.json()
-    // Un tenant sólo puede tocar sus propios leads
     const { data: lead } = await supabase
       .from("leads")
       .select("tenant_id")
@@ -189,6 +227,122 @@ Deno.serve(async (req) => {
       .from("leads")
       .update({ ai_active, updated_at: new Date().toISOString() })
       .eq("sender_id", sender_id)
+    if (error) return json({ error: error.message }, 500)
+    return json({ ok: true })
+  }
+
+  // ─── POST ?action=update-lead — editar datos del lead manualmente ───
+  if (req.method === "POST" && action === "update-lead") {
+    const { sender_id, updates } = await req.json()
+    const { data: lead } = await supabase
+      .from("leads")
+      .select("tenant_id")
+      .eq("sender_id", sender_id)
+      .maybeSingle()
+    if (!lead) return json({ error: "Lead not found" }, 404)
+    if (!canAccessTenant(user, lead.tenant_id)) return json({ error: "Forbidden" }, 403)
+
+    // Whitelist de campos editables manualmente
+    const allowed: Record<string, unknown> = {}
+    const whitelist = [
+      "name", "partner_name", "phone", "email",
+      "status", "score", "tour_notes", "notes", "tags",
+      "language", "preferred_unit", "selected_property_name",
+      "tour_date", "tour_confirmed", "move_in_date",
+      "occupants", "pets", "credit_score", "budget_max",
+    ]
+    for (const key of whitelist) {
+      if (key in updates) allowed[key] = updates[key]
+    }
+
+    const { error } = await supabase
+      .from("leads")
+      .update({ ...allowed, updated_at: new Date().toISOString() })
+      .eq("sender_id", sender_id)
+    if (error) return json({ error: error.message }, 500)
+    return json({ ok: true })
+  }
+
+  // ─── POST ?action=send-message — enviar mensaje manual al lead ───
+  if (req.method === "POST" && action === "send-message") {
+    const { sender_id, texto, pause_bot } = await req.json()
+
+    const { data: lead } = await supabase
+      .from("leads")
+      .select("tenant_id, id")
+      .eq("sender_id", sender_id)
+      .maybeSingle()
+    if (!lead) return json({ error: "Lead not found" }, 404)
+    if (!canAccessTenant(user, lead.tenant_id)) return json({ error: "Forbidden" }, 403)
+
+    const { data: t } = await supabase
+      .from("tenants")
+      .select("instagram_access_token")
+      .eq("id", lead.tenant_id)
+      .maybeSingle()
+    if (!t?.instagram_access_token) return json({ error: "No access token" }, 500)
+
+    // Enviar vía Graph API
+    const res = await fetch("https://graph.instagram.com/v22.0/me/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${t.instagram_access_token}`,
+      },
+      body: JSON.stringify({
+        recipient: { id: sender_id },
+        message: { text: texto },
+      }),
+    })
+
+    if (!res.ok) {
+      const err = await res.text()
+      return json({ error: "IG API error: " + err }, 500)
+    }
+
+    // Guardar como outbound "agent"
+    await supabase.from("conversations").insert({
+      sender_id,
+      lead_id: lead.id,
+      tenant_id: lead.tenant_id,
+      direction: "outbound",
+      message_text: texto,
+      sent_by: "agent",
+      channel: "instagram",
+    })
+
+    // Pausar bot si se pidió
+    if (pause_bot) {
+      await supabase
+        .from("leads")
+        .update({ ai_active: false, updated_at: new Date().toISOString() })
+        .eq("sender_id", sender_id)
+    }
+
+    return json({ ok: true })
+  }
+
+  // ─── POST ?action=bulk-update-status — mover múltiples leads de status (kanban) ───
+  if (req.method === "POST" && action === "bulk-update-status") {
+    const { sender_ids, new_status } = await req.json()
+    if (!Array.isArray(sender_ids) || sender_ids.length === 0) {
+      return json({ error: "sender_ids requerido" }, 400)
+    }
+
+    // Verificar que todos los leads son del tenant del usuario
+    const { data: leadsCheck } = await supabase
+      .from("leads")
+      .select("sender_id, tenant_id")
+      .in("sender_id", sender_ids)
+
+    for (const l of leadsCheck || []) {
+      if (!canAccessTenant(user, l.tenant_id)) return json({ error: "Forbidden" }, 403)
+    }
+
+    const { error } = await supabase
+      .from("leads")
+      .update({ status: new_status, updated_at: new Date().toISOString() })
+      .in("sender_id", sender_ids)
     if (error) return json({ error: error.message }, 500)
     return json({ ok: true })
   }

@@ -14,6 +14,17 @@ function buildSystemPrompt(
   const agentArea = "Miami"
   const communicationStyle = agentConfig?.communication_style || "casual"
   const agentVoice = agentConfig?.agent_voice || `${agentName}, a real estate agent in ${agentArea}`
+
+  // Feature flag: multi_language
+  // Si está OFF, el bot siempre responde en tenant.agent_language.
+  // Si está ON, se adapta al idioma del lead.
+  const multiLang = tenant?.features?.multi_language !== false
+  const agentLang = tenant?.agent_language || "en"
+  const languageRule = multiLang
+    ? `- Switch to Spanish if the lead writes in Spanish, otherwise English`
+    : agentLang === "es"
+      ? `- Always respond in Spanish, regardless of the lead's language`
+      : `- Always respond in English, regardless of the lead's language`
   const estado = `CURRENT LEAD STATE (use this as ground truth — don't re-ask things you already know):
 - Name: ${leadEstado.name || "unknown"}
 - Partner name: ${leadEstado.partner_name || "unknown"}
@@ -35,7 +46,7 @@ PERSONALITY:
 - Friendly, ${communicationStyle}, direct
 - Write in SHORT separate messages (2-4 words each), never long blocks
 - Use informal English with slight grammatical imperfections ("Is you alone", "we better price", "see you their")
-- Switch to Spanish if the lead writes in Spanish
+${languageRule}
 - Use 👍 emoji for confirmations only
 - Never sound like a robot or corporate agent
 - Never reveal you are an AI. Always respond as ${agentName}.
