@@ -1,6 +1,7 @@
-// Enviar mensajes por Instagram Graph API
+// Enviar mensajes por Instagram Graph API (Instagram Business Login flow)
 
-const GRAPH_API_URL = "https://graph.facebook.com/v19.0/me/messages"
+// Endpoint del nuevo Instagram Business API (tokens IGAA)
+const IG_API_URL = "https://graph.instagram.com/v22.0/me/messages"
 
 export async function enviarMensaje(recipientId: string, texto: string) {
   const token = Deno.env.get("INSTAGRAM_ACCESS_TOKEN")
@@ -10,14 +11,15 @@ export async function enviarMensaje(recipientId: string, texto: string) {
     return
   }
 
-  const res = await fetch(GRAPH_API_URL, {
+  const res = await fetch(IG_API_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`,
+    },
     body: JSON.stringify({
       recipient: { id: recipientId },
       message: { text: texto },
-      messaging_type: "RESPONSE",
-      access_token: token,
     }),
   })
 

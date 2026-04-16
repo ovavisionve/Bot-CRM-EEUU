@@ -4,8 +4,9 @@
 
 import { generarRespuesta } from "../_shared/respuestas.ts"
 import { enviarMensajesMultiples } from "../_shared/instagram.ts"
-import { obtenerOCrearLead, guardarMensaje, obtenerHistorial } from "../_shared/db.ts"
+import { obtenerOCrearLead, guardarMensaje, obtenerHistorial, actualizarLead } from "../_shared/db.ts"
 import { notificarAdmin } from "../_shared/notificar.ts"
+import { extraerEstadoLead } from "../_shared/extractor.ts"
 
 Deno.serve(async (req) => {
   const url = new URL(req.url)
@@ -90,19 +91,40 @@ Deno.serve(async (req) => {
           // 3. Obtener historial de conversación
           const historial = await obtenerHistorial(senderId)
 
-          // 4. Generar respuesta con Claude
-          const respuestas = await generarRespuesta(mensaje, historial)
+          // 4. Extraer estado estructurado del lead (memoria explícita)
+          const nuevoEstado = await extraerEstadoLead(historial, mensaje, lead)
+          if (Object.keys(nuevoEstado).length > 0) {
+            await actualizarLead(senderId, nuevoEstado)
+          }
 
-          // 5. Enviar mensajes por Instagram (múltiples, cortos)
+          // 5. Generar respuesta con Claude usando el estado actualizado
+          const leadActualizado = { ...lead, ...nuevoEstado }
+          const respuestas = await generarRespuesta(mensaje, historial, leadActualizado)
+
+          // 6. Enviar mensajes por Instagram (múltiples, cortos)
           await enviarMensajesMultiples(senderId, respuestas)
 
-          // 6. Guardar cada respuesta en la DB
+          // 7. Guardar cada respuesta en la DB
           for (const resp of respuestas) {
             await guardarMensaje(senderId, lead.id, resp, "outbound")
           }
 
-          // 7. Notificar al admin
-          await notificarAdmin({ senderId, mensaje })
+          // 8. Notificar al admin si hubo cambio de estado importante
+          if (nuevoEstado.status === "tour_confirmed" || nuevoEstado.tour_confirmed === true) {
+            await notificarAdmin({
+              senderId,
+              mensaje: `Tour agendado con ${leadActualizado.name || senderId} en ${leadActualizado.tour_date || "fecha pendiente"}`,
+              tipo: "tour_agendado",
+            })
+          } else if (nuevoEstado.status === "qualified") {
+            await notificarAdmin({
+              senderId,
+              mensaje: `Lead calificado: ${leadActualizado.name || senderId}`,
+              tipo: "calificado",
+            })
+          } else {
+            await notificarAdmin({ senderId, mensaje })
+          }
         }
       }
     } catch (err) {
