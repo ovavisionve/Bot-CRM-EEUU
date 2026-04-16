@@ -109,9 +109,48 @@
     .detail-item { display: flex; gap: 4px; align-items: center; }
 
     /* Chat */
+    .chat-container {
+      flex: 1; display: flex; flex-direction: column;
+      overflow: hidden;
+    }
     .chat {
       flex: 1; overflow-y: auto; padding: 24px;
       display: flex; flex-direction: column; gap: 8px;
+    }
+    .chat-composer {
+      border-top: 1px solid #2a2a2a;
+      padding: 12px 16px; background: #141414;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .chat-composer-row {
+      display: flex; gap: 8px; align-items: flex-end;
+    }
+    .chat-input {
+      flex: 1; padding: 10px 12px; background: #0f0f0f;
+      color: #e0e0e0; border: 1px solid #2a2a2a; border-radius: 8px;
+      font-size: 14px; font-family: inherit;
+      resize: none; min-height: 40px; max-height: 120px;
+    }
+    .chat-input:focus { outline: none; border-color: #6366f1; }
+    .chat-send {
+      background: #6366f1; color: white; border: none;
+      padding: 10px 18px; border-radius: 8px; cursor: pointer;
+      font-size: 13px; font-weight: 600; white-space: nowrap;
+    }
+    .chat-send:hover { background: #5558d9; }
+    .chat-send:disabled { opacity: 0.5; cursor: not-allowed; }
+    .chat-options {
+      display: flex; align-items: center; gap: 12px;
+      font-size: 12px; color: #888;
+    }
+    .chat-options label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+    .chat-options input[type="checkbox"] { accent-color: #6366f1; }
+    .message.outbound.agent .bubble {
+      background: #1e3b2f; color: #86efac;
+    }
+    .message.agent-tag {
+      font-size: 10px; color: #86efac; margin-top: 2px;
+      text-align: right;
     }
     .message { display: flex; max-width: 65%; }
     .message.inbound { align-self: flex-start; }
@@ -598,18 +637,80 @@
 
       const chatHTML = msgs.map(function(m) {
         const dir = m.direction === "inbound" ? "inbound" : "outbound"
+        const isAgent = m.direction === "outbound" && m.sent_by === "agent"
+        const dirClass = dir + (isAgent ? " agent" : "")
         const time = new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
-        return '<div class="message ' + dir + '"><div class="bubble">' + esc(m.message_text) +
-          '<span class="msg-time">' + time + '</span></div></div>'
+        const agentTag = isAgent ? '<div class="agent-tag">Enviado por vos</div>' : ''
+        return '<div class="message ' + dirClass + '"><div style="max-width:100%;">' +
+          '<div class="bubble">' + esc(m.message_text) +
+          '<span class="msg-time">' + time + '</span></div>' +
+          agentTag + '</div></div>'
       }).join("")
+
+      const composerHTML =
+        '<div class="chat-composer">' +
+          '<div class="chat-composer-row">' +
+            '<textarea class="chat-input" id="msg-input" placeholder="Escribí un mensaje manual al lead..." rows="1"></textarea>' +
+            '<button class="chat-send" id="msg-send" onclick="sendManualMessage(\'' + lead.sender_id + '\')">Enviar</button>' +
+          '</div>' +
+          '<div class="chat-options">' +
+            '<label><input type="checkbox" id="msg-pause-bot" ' + (lead.ai_active === false ? '' : 'checked') + '/> Pausar bot después de enviar</label>' +
+          '</div>' +
+        '</div>'
 
       main.innerHTML =
         '<div class="main-header"><h2>' + esc(name) + '</h2>' + aiBadge + '</div>' +
         detailHTML +
-        '<div class="chat" id="chat">' + (chatHTML || '<div class="empty-state"><p>Sin mensajes</p></div>') + '</div>'
+        '<div class="chat-container">' +
+          '<div class="chat" id="chat">' + (chatHTML || '<div class="empty-state" style="padding:40px 0;"><p>Sin mensajes aún</p></div>') + '</div>' +
+          composerHTML +
+        '</div>'
 
       const chat = document.getElementById("chat")
       if (chat) chat.scrollTop = chat.scrollHeight
+
+      // Enter para enviar, Shift+Enter para nueva línea
+      const input = document.getElementById("msg-input")
+      if (input) {
+        input.addEventListener("keydown", function(e) {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault()
+            window.sendManualMessage(lead.sender_id)
+          }
+        })
+        input.focus()
+      }
+    }
+
+    window.sendManualMessage = async function(senderId) {
+      const input = document.getElementById("msg-input")
+      const btn = document.getElementById("msg-send")
+      const pauseChk = document.getElementById("msg-pause-bot")
+      const texto = (input?.value || "").trim()
+      if (!texto) return
+      if (btn) { btn.disabled = true; btn.textContent = "Enviando..." }
+
+      const r = await api("?action=send-message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sender_id: senderId,
+          texto,
+          pause_bot: !!pauseChk?.checked,
+        }),
+      })
+
+      if (btn) { btn.disabled = false; btn.textContent = "Enviar" }
+
+      if (r.ok) {
+        if (input) input.value = ""
+        toast("Mensaje enviado")
+        // Refrescar la conversación
+        await loadLeads()
+        if (selectedLead) selectLead(selectedLead)
+      } else {
+        toast(r.error || "Error enviando mensaje", true)
+      }
     }
 
     async function toggleAI(senderId, newState) {
