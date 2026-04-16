@@ -9,3 +9,7 @@ verify_jwt = false
 # Cron de follow-ups (disparado por pg_cron cada hora)
 [functions.followup-cron]
 verify_jwt = false
+
+# Bootstrap one-shot (protegido con token interno)
+[functions.bootstrap]
+verify_jwt = false

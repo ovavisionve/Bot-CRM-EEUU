@@ -3,61 +3,70 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OVA REAL - Dashboard</title>
+  <title>OVA REAL - CRM</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #0f0f0f;
-      color: #e0e0e0;
-      height: 100vh;
-      overflow: hidden;
+      background: #0f0f0f; color: #e0e0e0;
+      height: 100vh; overflow: hidden;
     }
     .app { display: flex; height: 100vh; }
 
     /* Sidebar */
     .sidebar {
-      width: 320px;
+      width: 340px;
       border-right: 1px solid #2a2a2a;
-      display: flex;
-      flex-direction: column;
+      display: flex; flex-direction: column;
       background: #141414;
     }
     .sidebar-header {
       padding: 16px 20px;
       border-bottom: 1px solid #2a2a2a;
+      display: flex; align-items: center; justify-content: space-between;
     }
-    .sidebar-header h1 { font-size: 16px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 10px; }
+    .sidebar-header h1 {
+      font-size: 15px; font-weight: 700; color: #fff;
+      display: flex; align-items: center; gap: 10px;
+    }
     .sidebar-header .logo {
       width: 28px; height: 28px; background: #6366f1; border-radius: 6px;
       display: flex; align-items: center; justify-content: center;
       font-weight: 700; font-size: 12px; color: #fff;
     }
-    .tenant-selector {
-      padding: 10px 20px;
-      background: #1a1a2e;
-      border-bottom: 1px solid #2a2a2a;
-      font-size: 12px;
+    .user-chip {
+      padding: 10px 20px; background: #1a1a2e;
+      border-bottom: 1px solid #2a2a2a; font-size: 12px;
+      display: flex; align-items: center; justify-content: space-between;
     }
-    .tenant-selector select {
-      width: 100%;
-      padding: 6px 8px;
-      background: #0f0f0f;
-      color: #e0e0e0;
-      border: 1px solid #333;
-      border-radius: 4px;
-      margin-top: 4px;
-      font-size: 13px;
+    .user-chip .who { color: #aaa; }
+    .user-chip .who strong { color: #e0e0e0; display: block; font-size: 13px; }
+    .user-chip button {
+      background: transparent; border: 1px solid #333;
+      color: #888; padding: 4px 10px; border-radius: 4px;
+      font-size: 11px; cursor: pointer;
     }
+    .user-chip button:hover { border-color: #666; color: #e0e0e0; }
+
+    .tabs {
+      display: flex; border-bottom: 1px solid #2a2a2a;
+    }
+    .tab {
+      flex: 1; padding: 10px; background: transparent; border: none;
+      color: #888; cursor: pointer; font-size: 12px;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      border-bottom: 2px solid transparent;
+    }
+    .tab.active { color: #6366f1; border-bottom-color: #6366f1; }
+    .tab:hover { color: #e0e0e0; }
+
+    .panel-content { flex: 1; overflow-y: auto; }
+
+    /* Pipeline Kanban (en vista leads cuando está colapsado) */
     .lead-count {
-      padding: 10px 20px;
-      font-size: 11px;
-      color: #888;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      border-bottom: 1px solid #2a2a2a;
+      padding: 10px 20px; font-size: 11px; color: #888;
+      text-transform: uppercase; letter-spacing: 0.5px;
     }
-    .leads-list { flex: 1; overflow-y: auto; }
     .lead-item {
       display: flex; align-items: center; gap: 12px;
       padding: 14px 20px; cursor: pointer;
@@ -86,11 +95,12 @@
     }
     .main-header h2 { font-size: 16px; font-weight: 600; }
     .ai-badge {
-      padding: 4px 10px;
-      background: #1e3b2f; color: #34d399;
+      padding: 4px 10px; background: #1e3b2f; color: #34d399;
       border-radius: 12px; font-size: 11px; font-weight: 600;
+      cursor: pointer; border: none;
     }
     .ai-badge.paused { background: #3b2f1e; color: #fbbf24; }
+
     .lead-detail-bar {
       padding: 12px 24px; background: #1a1a2e;
       border-bottom: 1px solid #2a2a2a;
@@ -106,25 +116,23 @@
     .message { display: flex; max-width: 65%; }
     .message.inbound { align-self: flex-start; }
     .message.outbound { align-self: flex-end; }
-    .bubble {
-      padding: 10px 14px; border-radius: 16px;
-      font-size: 14px; line-height: 1.4;
-    }
+    .bubble { padding: 10px 14px; border-radius: 16px; font-size: 14px; line-height: 1.4; }
     .inbound .bubble { background: #2a2a2a; border-bottom-left-radius: 4px; }
-    .outbound .bubble {
-      background: #3730a3; color: #e0e7ff; border-bottom-right-radius: 4px;
-    }
-    .msg-time {
-      display: block; font-size: 10px; color: #888;
-      margin-top: 4px; text-align: right;
-    }
+    .outbound .bubble { background: #3730a3; color: #e0e7ff; border-bottom-right-radius: 4px; }
+    .msg-time { display: block; font-size: 10px; color: #888; margin-top: 4px; text-align: right; }
     .outbound .msg-time { color: #a5b4fc; }
 
     .empty-state {
       flex: 1; display: flex; flex-direction: column;
       align-items: center; justify-content: center; color: #555;
     }
-    .empty-state .icon { font-size: 48px; margin-bottom: 16px; }
+    .empty-state .icon-box {
+      width: 60px; height: 60px; background: #1a1a1a;
+      border-radius: 12px; display: flex;
+      align-items: center; justify-content: center;
+      font-size: 28px; margin-bottom: 16px;
+      border: 1px solid #2a2a2a;
+    }
 
     .status-badge {
       font-size: 11px; padding: 2px 8px; border-radius: 10px;
@@ -141,7 +149,43 @@
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
 
-    .loading { text-align: center; padding: 40px; color: #666; }
+    /* Config view */
+    .config-view { padding: 24px 32px; overflow-y: auto; height: 100%; }
+    .config-view h2 { font-size: 20px; margin-bottom: 16px; }
+    .config-view h3 { font-size: 14px; color: #6366f1; text-transform: uppercase; margin-top: 24px; margin-bottom: 12px; }
+    .config-row { margin-bottom: 16px; }
+    .config-row label { display: block; font-size: 12px; color: #888; margin-bottom: 4px; }
+    .config-row input, .config-row select, .config-row textarea {
+      width: 100%; padding: 10px 12px; background: #141414;
+      color: #e0e0e0; border: 1px solid #2a2a2a; border-radius: 6px;
+      font-size: 14px;
+    }
+    .btn {
+      background: #6366f1; color: white; border: none;
+      padding: 10px 20px; border-radius: 6px; cursor: pointer;
+      font-size: 14px; font-weight: 500;
+    }
+    .btn:hover { background: #5558d9; }
+    .btn-secondary { background: #333; }
+
+    .feature-list { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; }
+    .feature-badge {
+      padding: 10px 14px; background: #1a1a1a; border: 1px solid #2a2a2a;
+      border-radius: 8px; font-size: 13px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .feature-badge.enabled { border-color: #1e3b2f; color: #34d399; }
+    .feature-badge.disabled { color: #666; }
+
+    .toast {
+      position: fixed; bottom: 20px; right: 20px;
+      background: #34d399; color: #0f0f0f;
+      padding: 12px 20px; border-radius: 8px;
+      font-weight: 600; opacity: 0;
+      transition: opacity 0.3s; z-index: 1000;
+    }
+    .toast.show { opacity: 1; }
+    .toast.error { background: #dc2626; color: white; }
 
     @media (max-width: 768px) {
       .sidebar { width: 100%; }
@@ -153,98 +197,112 @@
     <div class="sidebar">
       <div class="sidebar-header">
         <h1><span class="logo">OR</span> OVA REAL</h1>
-        <a href="admin.html" style="font-size:11px; color:#6366f1; text-decoration:none;">Admin panel &rarr;</a>
       </div>
-      <div class="tenant-selector">
-        <span style="color:#888;">Cliente</span>
-        <select id="tenant-select" onchange="onTenantChange()">
-          <option>Cargando...</option>
-        </select>
+      <div class="user-chip">
+        <div class="who">
+          <strong id="user-name">Cargando...</strong>
+          <span id="tenant-name">-</span>
+        </div>
+        <button onclick="logout()">Salir</button>
       </div>
-      <div class="lead-count" id="lead-count">Cargando...</div>
-      <div class="leads-list" id="leads-list"></div>
+      <div class="tabs">
+        <button class="tab active" data-view="leads" onclick="setView('leads')">Leads</button>
+        <button class="tab" data-view="config" onclick="setView('config')">Config</button>
+      </div>
+      <div class="panel-content" id="sidebar-content">
+        <div style="padding:40px; text-align:center; color:#666;">Cargando...</div>
+      </div>
     </div>
     <div class="main" id="main">
       <div class="empty-state">
-        <div class="icon">OR</div>
-        <p>Selecciona un lead para ver la conversacion</p>
+        <div class="icon-box">CRM</div>
+        <p>Selecciona un lead</p>
       </div>
     </div>
   </div>
+  <div class="toast" id="toast"></div>
 
-  <script>
-    const API = "https://vrfydffwczomvuoigwsm.supabase.co/functions/v1/dashboard";
-    let selectedLead = null;
-    let selectedTenant = null;
-    let leadsData = [];
-    let tenantsData = [];
+  <script type="module">
+    import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
-    async function fetchTenants() {
-      try {
-        const res = await fetch(API + "?tenants=1");
-        const data = await res.json();
-        tenantsData = data.tenants || [];
-        const sel = document.getElementById("tenant-select");
-        sel.innerHTML = tenantsData.map(t =>
-          '<option value="' + t.slug + '">' + esc(t.name) + ' (' + (t.instagram_handle || 'IG') + ')</option>'
-        ).join("");
-        if (tenantsData.length > 0 && !selectedTenant) {
-          selectedTenant = tenantsData[0].slug;
-          sel.value = selectedTenant;
-          fetchLeads();
-        }
-      } catch (err) {
-        document.getElementById("lead-count").textContent = "Error de conexion";
-      }
+    const SUPABASE_URL = "https://vrfydffwczomvuoigwsm.supabase.co"
+    const SUPABASE_ANON_KEY = "REPLACE_WITH_ANON_KEY"
+    const API = SUPABASE_URL + "/functions/v1/dashboard"
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+    window.supabase = supabase
+
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) {
+      window.location.href = "login.html"
+    }
+    window.token = session.access_token
+
+    let currentUser = null
+    let currentTenant = null
+    let selectedLead = null
+    let leads = []
+    let currentView = "leads"
+
+    // Inicializar
+    const meRes = await api("?action=me")
+    currentUser = meRes.user
+    currentTenant = meRes.tenant
+
+    // Si es super_admin, redirigir a admin
+    if (currentUser?.role === "super_admin") {
+      window.location.href = "admin.html"
     }
 
-    function onTenantChange() {
-      selectedTenant = document.getElementById("tenant-select").value;
-      selectedLead = null;
-      document.getElementById("main").innerHTML = '<div class="empty-state"><div class="icon">OR</div><p>Selecciona un lead</p></div>';
-      fetchLeads();
+    document.getElementById("user-name").textContent = currentUser?.email || "Usuario"
+    document.getElementById("tenant-name").textContent = currentTenant?.name || "-"
+
+    await loadLeads()
+
+    window.setView = function(view) {
+      currentView = view
+      document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.view === view))
+      if (view === "leads") renderLeadsList()
+      else renderConfig()
     }
 
-    async function fetchLeads() {
-      try {
-        const url = API + (selectedTenant ? "?tenant=" + selectedTenant : "");
-        const res = await fetch(url);
-        const data = await res.json();
-        leadsData = data.leads || [];
-        renderLeads();
-      } catch (err) {
-        document.getElementById("lead-count").textContent = "Error";
-      }
+    window.logout = async function() {
+      await supabase.auth.signOut()
+      window.location.href = "login.html"
     }
 
-    async function selectLead(senderId) {
-      selectedLead = senderId;
-      renderLeads();
-      document.getElementById("main").innerHTML = '<div class="loading">Cargando conversacion...</div>';
-      try {
-        const res = await fetch(API + "?tenant=" + selectedTenant + "&lead=" + senderId);
-        const data = await res.json();
-        const lead = leadsData.find(l => l.sender_id === senderId);
-        renderChat(lead, data.conversacion || []);
-      } catch (err) {
-        document.getElementById("main").innerHTML = '<div class="loading">Error</div>';
-      }
+    window.selectLead = selectLead
+    window.toggleAI = toggleAI
+    window.saveConfig = saveConfig
+
+    async function api(path, init = {}) {
+      const res = await fetch(API + path, {
+        ...init,
+        headers: { ...(init.headers || {}), Authorization: "Bearer " + window.token },
+      })
+      return res.json()
     }
 
-    function renderLeads() {
-      document.getElementById("lead-count").textContent = "Leads (" + leadsData.length + ")";
-      const list = document.getElementById("leads-list");
-      if (leadsData.length === 0) {
-        list.innerHTML = '<div class="empty-state" style="padding:40px;"><p>Sin leads aun</p></div>';
-        return;
+    async function loadLeads() {
+      const data = await api("?tenant=" + (currentTenant?.slug || ""))
+      leads = data.leads || []
+      renderLeadsList()
+    }
+
+    function renderLeadsList() {
+      const content = document.getElementById("sidebar-content")
+      content.innerHTML = '<div class="lead-count">Leads (' + leads.length + ')</div>'
+      if (leads.length === 0) {
+        content.innerHTML += '<div style="padding:40px; text-align:center; color:#666; font-size:13px;">Sin leads aún.<br>Cuando alguien te escriba por IG aparece acá.</div>'
+        return
       }
-      list.innerHTML = leadsData.map(function(lead) {
-        const isActive = lead.sender_id === selectedLead;
-        const name = lead.name || "Lead " + lead.sender_id;
-        const initial = name.charAt(0).toUpperCase();
-        const status = lead.status || "new";
-        const time = getTimeAgo(lead.updated_at || lead.created_at);
-        return '<div class="lead-item' + (isActive ? ' active' : '') + '" onclick="selectLead(\'' + lead.sender_id + '\')">' +
+      content.innerHTML += leads.map(function(l) {
+        const isActive = l.sender_id === selectedLead
+        const name = l.name || "Lead " + l.sender_id
+        const initial = name.charAt(0).toUpperCase()
+        const status = l.status || "new"
+        const time = getTimeAgo(l.updated_at || l.created_at)
+        return '<div class="lead-item' + (isActive ? ' active' : '') + '" onclick="selectLead(\'' + l.sender_id + '\')">' +
           '<div class="lead-avatar">' + initial + '</div>' +
           '<div class="lead-info">' +
             '<div class="lead-name">' + esc(name) + '</div>' +
@@ -253,74 +311,169 @@
               '<span class="lead-time">' + time + '</span>' +
             '</div>' +
           '</div>' +
-        '</div>';
-      }).join("");
+        '</div>'
+      }).join("")
+    }
+
+    async function selectLead(senderId) {
+      selectedLead = senderId
+      renderLeadsList()
+      document.getElementById("main").innerHTML = '<div class="empty-state"><div class="icon-box">CRM</div><p>Cargando...</p></div>'
+      const data = await api("?tenant=" + (currentTenant?.slug || "") + "&lead=" + senderId)
+      const lead = leads.find(l => l.sender_id === senderId)
+      renderChat(lead, data.conversacion || [])
     }
 
     function renderChat(lead, msgs) {
-      const main = document.getElementById("main");
-      const name = lead ? (lead.name || "Lead " + lead.sender_id) : "Lead";
+      const main = document.getElementById("main")
+      if (!lead) return
+      const name = lead.name || "Lead " + lead.sender_id
+      const aiBadge = lead.ai_active === false
+        ? '<button class="ai-badge paused" onclick="toggleAI(\'' + lead.sender_id + '\', true)">Bot pausado - Activar</button>'
+        : '<button class="ai-badge" onclick="toggleAI(\'' + lead.sender_id + '\', false)">Bot activo - Pausar</button>'
 
-      let detailHTML = "";
-      if (lead) {
-        const aiBadge = lead.ai_active === false
-          ? '<span class="ai-badge paused">Bot pausado</span>'
-          : '<span class="ai-badge">Bot activo</span>';
-        detailHTML = '<div class="lead-detail-bar">';
-        detailHTML += '<div class="detail-item"><strong>ID:</strong> ' + esc(lead.sender_id) + '</div>';
-        detailHTML += '<div class="detail-item"><strong>Status:</strong> <span class="status-badge status-' + lead.status + '">' + lead.status + '</span></div>';
-        detailHTML += '<div class="detail-item"><strong>Idioma:</strong> ' + (lead.language || "en") + '</div>';
-        if (lead.credit_score) detailHTML += '<div class="detail-item"><strong>Credito:</strong> ' + lead.credit_score + '</div>';
-        if (lead.pets) detailHTML += '<div class="detail-item"><strong>Mascotas:</strong> ' + lead.pets + '</div>';
-        if (lead.occupants) detailHTML += '<div class="detail-item"><strong>Ocupantes:</strong> ' + lead.occupants + '</div>';
-        if (lead.selected_property_name) detailHTML += '<div class="detail-item"><strong>Propiedad:</strong> ' + esc(lead.selected_property_name) + '</div>';
-        if (lead.tour_date) detailHTML += '<div class="detail-item"><strong>Tour:</strong> ' + esc(lead.tour_date) + '</div>';
-        detailHTML += '<div class="detail-item"><strong>Mensajes:</strong> ' + msgs.length + '</div>';
-        detailHTML += '</div>';
+      let detailHTML = '<div class="lead-detail-bar">'
+      detailHTML += '<div class="detail-item"><strong>ID:</strong> ' + esc(lead.sender_id) + '</div>'
+      detailHTML += '<div class="detail-item"><strong>Status:</strong> <span class="status-badge status-' + lead.status + '">' + lead.status + '</span></div>'
+      detailHTML += '<div class="detail-item"><strong>Idioma:</strong> ' + (lead.language || "en") + '</div>'
+      if (lead.credit_score) detailHTML += '<div class="detail-item"><strong>Crédito:</strong> ' + lead.credit_score + '</div>'
+      if (lead.pets) detailHTML += '<div class="detail-item"><strong>Mascotas:</strong> ' + lead.pets + '</div>'
+      if (lead.occupants) detailHTML += '<div class="detail-item"><strong>Ocupantes:</strong> ' + lead.occupants + '</div>'
+      if (lead.selected_property_name) detailHTML += '<div class="detail-item"><strong>Propiedad:</strong> ' + esc(lead.selected_property_name) + '</div>'
+      if (lead.tour_date) detailHTML += '<div class="detail-item"><strong>Tour:</strong> ' + esc(lead.tour_date) + '</div>'
+      detailHTML += '<div class="detail-item"><strong>Mensajes:</strong> ' + msgs.length + '</div>'
+      detailHTML += '</div>'
 
-        main.innerHTML =
-          '<div class="main-header"><h2>' + esc(name) + '</h2>' + aiBadge + '</div>' +
-          detailHTML +
-          '<div class="chat" id="chat">' + msgs.map(renderMessage).join("") + '</div>';
-      } else {
-        main.innerHTML =
-          '<div class="main-header"><h2>' + esc(name) + '</h2></div>' +
-          '<div class="chat" id="chat">' + msgs.map(renderMessage).join("") + '</div>';
-      }
+      const chatHTML = msgs.map(function(m) {
+        const dir = m.direction === "inbound" ? "inbound" : "outbound"
+        const time = new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+        return '<div class="message ' + dir + '"><div class="bubble">' + esc(m.message_text) +
+          '<span class="msg-time">' + time + '</span></div></div>'
+      }).join("")
 
-      const chat = document.getElementById("chat");
-      if (chat) chat.scrollTop = chat.scrollHeight;
+      main.innerHTML =
+        '<div class="main-header"><h2>' + esc(name) + '</h2>' + aiBadge + '</div>' +
+        detailHTML +
+        '<div class="chat" id="chat">' + (chatHTML || '<div class="empty-state"><p>Sin mensajes</p></div>') + '</div>'
+
+      const chat = document.getElementById("chat")
+      if (chat) chat.scrollTop = chat.scrollHeight
     }
 
-    function renderMessage(msg) {
-      const dir = msg.direction === "inbound" ? "inbound" : "outbound";
-      const time = new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-      return '<div class="message ' + dir + '">' +
-        '<div class="bubble">' + esc(msg.message_text) +
-          '<span class="msg-time">' + time + '</span>' +
-        '</div></div>';
+    async function toggleAI(senderId, newState) {
+      const r = await api("?action=toggle-ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sender_id: senderId, ai_active: newState }),
+      })
+      if (r.ok) {
+        toast(newState ? "Bot activado" : "Bot pausado")
+        await loadLeads()
+        if (selectedLead) selectLead(selectedLead)
+      } else toast(r.error || "Error", true)
+    }
+
+    function renderConfig() {
+      const content = document.getElementById("sidebar-content")
+      content.innerHTML = '<div style="padding:20px; color:#888; font-size:13px;">Mirá los detalles del panel principal →</div>'
+
+      const t = currentTenant || {}
+      const f = t.features || {}
+      const featureKeys = {
+        instagram_bot: "Bot Instagram",
+        ai_responses: "Respuestas IA",
+        google_sheets_properties: "Propiedades (Sheets)",
+        ai_memory_extraction: "Memoria estructurada",
+        auto_followups: "Follow-ups automáticos",
+        admin_email_notifications: "Email notifications",
+        handoff_to_human: "Handoff a humano",
+        multi_language: "Multi-idioma",
+        dashboard_access: "Acceso al CRM",
+        drip_campaigns: "Drip campaigns",
+        lead_scoring: "Lead scoring",
+        analytics: "Analytics",
+      }
+      let featuresHtml = ""
+      for (const k of Object.keys(featureKeys)) {
+        const on = !!f[k]
+        featuresHtml += '<div class="feature-badge ' + (on ? "enabled" : "disabled") + '">' +
+          featureKeys[k] + '<span>' + (on ? "ON" : "OFF") + '</span></div>'
+      }
+
+      document.getElementById("main").innerHTML =
+        '<div class="config-view">' +
+          '<h2>Configuración de ' + esc(t.name || "") + '</h2>' +
+          '<h3>Datos del agente</h3>' +
+          '<div class="config-row"><label>Nombre</label><input id="c-agent-name" value="' + esc(t.agent_name || "") + '"/></div>' +
+          '<div class="config-row"><label>Email</label><input id="c-agent-email" type="email" value="' + esc(t.agent_email || "") + '"/></div>' +
+          '<div class="config-row"><label>Teléfono / WhatsApp</label><input id="c-agent-phone" value="' + esc(t.agent_phone || "") + '"/></div>' +
+          '<div class="config-row"><label>Idioma preferido</label><select id="c-agent-language">' +
+            '<option value="en"' + (t.agent_language === "en" ? " selected" : "") + '>English</option>' +
+            '<option value="es"' + (t.agent_language === "es" ? " selected" : "") + '>Español</option>' +
+          '</select></div>' +
+          '<h3>Bot</h3>' +
+          '<div class="config-row"><label>Nombre del bot</label><input id="c-bot-name" value="' + esc(t.bot_name || "") + '"/></div>' +
+          '<div class="config-row"><label>Bot activo</label><select id="c-bot-active">' +
+            '<option value="true"' + (t.bot_active ? " selected" : "") + '>Sí</option>' +
+            '<option value="false"' + (!t.bot_active ? " selected" : "") + '>No</option>' +
+          '</select></div>' +
+          '<div class="config-row"><label>Google Sheet ID (propiedades)</label><input id="c-sheet-id" value="' + esc(t.google_sheet_id || "") + '"/></div>' +
+          '<button class="btn" onclick="saveConfig()">Guardar cambios</button>' +
+          '<h3>Features contratados</h3>' +
+          '<p style="font-size:13px; color:#888; margin-bottom:12px;">Estos los gestiona OVA VISION. Si necesitas activar algo, avisanos.</p>' +
+          '<div class="feature-list">' + featuresHtml + '</div>' +
+        '</div>'
+    }
+
+    async function saveConfig() {
+      const updates = {
+        agent_name: document.getElementById("c-agent-name").value,
+        agent_email: document.getElementById("c-agent-email").value,
+        agent_phone: document.getElementById("c-agent-phone").value,
+        agent_language: document.getElementById("c-agent-language").value,
+        bot_name: document.getElementById("c-bot-name").value,
+        bot_active: document.getElementById("c-bot-active").value === "true",
+        google_sheet_id: document.getElementById("c-sheet-id").value,
+      }
+      const r = await api("?action=update-tenant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: currentTenant.slug, updates }),
+      })
+      if (r.ok) {
+        toast("Guardado")
+        const me = await api("?action=me")
+        currentTenant = me.tenant
+      } else toast(r.error || "Error", true)
+    }
+
+    function toast(msg, isError) {
+      const el = document.getElementById("toast")
+      el.textContent = msg
+      el.className = "toast show" + (isError ? " error" : "")
+      setTimeout(() => el.className = "toast", 2500)
     }
 
     function esc(s) {
-      if (s === null || s === undefined) return "";
-      var d = document.createElement("div");
-      d.textContent = String(s);
-      return d.innerHTML;
+      if (s === null || s === undefined) return ""
+      const d = document.createElement("div")
+      d.textContent = String(s)
+      return d.innerHTML
     }
 
     function getTimeAgo(dateStr) {
-      if (!dateStr) return "";
-      var diff = Date.now() - new Date(dateStr).getTime();
-      var mins = Math.floor(diff / 60000);
-      if (mins < 1) return "ahora";
-      if (mins < 60) return mins + "m";
-      var hours = Math.floor(mins / 60);
-      if (hours < 24) return hours + "h";
-      return Math.floor(hours / 24) + "d";
+      if (!dateStr) return ""
+      const diff = Date.now() - new Date(dateStr).getTime()
+      const mins = Math.floor(diff / 60000)
+      if (mins < 1) return "ahora"
+      if (mins < 60) return mins + "m"
+      const hours = Math.floor(mins / 60)
+      if (hours < 24) return hours + "h"
+      return Math.floor(hours / 24) + "d"
     }
 
-    fetchTenants();
-    setInterval(() => { if (selectedTenant) fetchLeads(); }, 15000);
+    // Auto-refresh
+    setInterval(() => { if (currentView === "leads") loadLeads() }, 15000)
   </script>
 </body>
 </html>
