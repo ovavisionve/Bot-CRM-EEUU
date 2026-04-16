@@ -25,3 +25,15 @@ verify_jwt = false
 # Tour reminders (disparado por pg_cron cada 30min)
 [functions.tour-reminders]
 verify_jwt = false
+
+# Stripe checkout - signup publico, sin auth
+[functions.stripe-checkout]
+verify_jwt = false
+
+# Stripe webhook - recibe llamadas de Stripe, sin auth
+[functions.stripe-webhook]
+verify_jwt = false
+
+# Stripe portal - requiere JWT de Supabase (el endpoint verifica manualmente)
+[functions.stripe-portal]
+verify_jwt = false

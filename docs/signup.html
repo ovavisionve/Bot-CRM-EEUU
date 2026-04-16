@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crear cuenta - OVA REAL</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root { --brand:#1877f2; --brand-dark:#166fe5; --bg:#f0f2f5; --surface:#fff;
+      --border:#e4e6eb; --text:#1c1e21; --text-soft:#65676b; --danger:#fa383e; --danger-bg:#ffebe9; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,sans-serif;
+      background:var(--bg); color:var(--text); min-height:100vh;
+      display:flex; align-items:center; justify-content:center; padding:20px; }
+    .box { background:var(--surface); border:1px solid var(--border); border-radius:14px;
+      padding:36px; width:100%; max-width:460px; box-shadow:0 12px 28px rgba(0,0,0,0.08); }
+    .logo { width:52px; height:52px; background:var(--brand); border-radius:12px;
+      display:inline-flex; align-items:center; justify-content:center; color:white;
+      font-weight:700; font-size:20px; margin-bottom:16px; }
+    h1 { font-size:26px; margin-bottom:6px; }
+    .sub { color:var(--text-soft); font-size:14px; margin-bottom:20px; }
+    .plan-pill { display:inline-block; background:#e7f3ff; color:var(--brand);
+      padding:4px 12px; border-radius:20px; font-size:12px; font-weight:700; margin-bottom:12px; }
+    label { display:block; font-size:13px; color:var(--text-soft); margin:14px 0 5px; font-weight:500; }
+    input { width:100%; padding:11px 13px; background:var(--surface); color:var(--text);
+      border:1px solid var(--border); border-radius:8px; font-size:14px; }
+    input:focus { outline:none; border-color:var(--brand); box-shadow:0 0 0 3px rgba(24,119,242,0.15); }
+    .row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .btn { width:100%; padding:13px; background:var(--brand); color:white; border:none;
+      border-radius:10px; font-size:16px; font-weight:600; cursor:pointer; margin-top:20px;
+      transition:background 0.15s; }
+    .btn:hover { background:var(--brand-dark); }
+    .btn:disabled { opacity:0.6; cursor:not-allowed; }
+    .error { background:var(--danger-bg); color:var(--danger); padding:11px; border-radius:8px;
+      font-size:13px; margin-top:12px; display:none; }
+    .error.show { display:block; }
+    .small { font-size:12px; color:var(--text-soft); margin-top:14px; text-align:center; }
+    .small a { color:var(--brand); }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div class="logo">OR</div>
+    <div class="plan-pill" id="plan-pill">Plan: Pro - $197/mes</div>
+    <h1>Crear cuenta</h1>
+    <p class="sub">Vas a pagar con Stripe. Si no te gusta en los primeros 14 días, te devolvemos la plata.</p>
+    <form onsubmit="return submitSignup(event)">
+      <label>Nombre del negocio *</label>
+      <input id="f-business" required placeholder="Ej: María Real Estate" />
+      <div class="row">
+        <div>
+          <label>Nombre del agente *</label>
+          <input id="f-agent" required placeholder="María González" />
+        </div>
+        <div>
+          <label>Teléfono / WhatsApp</label>
+          <input id="f-phone" placeholder="+1..." />
+        </div>
+      </div>
+      <label>Email *</label>
+      <input id="f-email" type="email" required placeholder="maria@ejemplo.com" />
+      <label>Contraseña *</label>
+      <input id="f-password" type="password" required placeholder="Mínimo 6 caracteres" minlength="6" />
+      <button class="btn" id="btn-submit" type="submit">Continuar al pago →</button>
+      <div class="error" id="err"></div>
+      <div class="small">¿Ya tenés cuenta? <a href="login.html">Iniciar sesión</a></div>
+    </form>
+  </div>
+  <script type="module">
+    const SUPABASE_URL = "https://vrfydffwczomvuoigwsm.supabase.co"
+    const params = new URLSearchParams(window.location.search)
+    const plan = params.get("plan") || "pro"
+    const prices = { starter: "97", pro: "197", agency: "497" }
+    const names = { starter: "Starter", pro: "Pro", agency: "Agency" }
+    document.getElementById("plan-pill").textContent = "Plan: " + (names[plan]||"Pro") + " - $" + (prices[plan]||"197") + "/mes"
+
+    window.submitSignup = async function(e) {
+      e.preventDefault()
+      const btn = document.getElementById("btn-submit")
+      const err = document.getElementById("err")
+      err.classList.remove("show")
+      btn.disabled = true; btn.textContent = "Procesando..."
+
+      const business_name = document.getElementById("f-business").value.trim()
+      const agent_name = document.getElementById("f-agent").value.trim()
+      const phone = document.getElementById("f-phone").value.trim()
+      const email = document.getElementById("f-email").value.trim()
+      const password = document.getElementById("f-password").value
+
+      const slug = (business_name.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"")
+        + "-" + Date.now().toString(36)).slice(0,50)
+
+      try {
+        const res = await fetch(SUPABASE_URL + "/functions/v1/stripe-checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email, plan,
+            signup_data: { email, password, business_name, agent_name, phone, slug },
+          }),
+        })
+        const data = await res.json()
+        if (!data.url) throw new Error(data.error || "Error al crear checkout")
+        window.location.href = data.url
+      } catch (e2) {
+        err.textContent = e2.message || String(e2)
+        err.classList.add("show")
+        btn.disabled = false; btn.textContent = "Continuar al pago →"
+      }
+    }
+  </script>
+</body>
+</html>

@@ -665,6 +665,7 @@
         <button class="nav-btn" data-main-view="tours" data-feature="tour_calendar" onclick="setMainView('tours')">📅 Tours</button>
         <button class="nav-btn" data-main-view="campaigns" data-feature="drip_campaigns" onclick="setMainView('campaigns')">🎯 Campañas</button>
         <button class="nav-btn" data-main-view="handoff" data-feature="handoff_to_human" onclick="setMainView('handoff')">🚨 Handoff <span id="handoff-count" style="background:#fa383e;color:white;border-radius:10px;padding:1px 6px;font-size:10px;display:none;margin-left:4px;"></span></button>
+        <button class="nav-btn" data-main-view="billing" data-feature="" onclick="setMainView('billing')">💳 Plan</button>
       </div>
       <div id="main-content" style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
         <div class="empty-state">
@@ -1061,7 +1062,11 @@
       const r = await api("?action=handoff-queue&tenant=" + slug)
       const queueLeads = r.leads || []
 
-      let html = '<div class="handoff-view"><h2 style="font-size:22px;margin-bottom:14px;color:var(--text);">🚨 Leads esperando respuesta humana (' + queueLeads.length + ')</h2>'
+      let html = '<div class="handoff-view">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">' +
+          '<h2 style="font-size:22px;color:var(--text);">🚨 Leads esperando respuesta humana (' + queueLeads.length + ')</h2>' +
+          (queueLeads.length > 0 ? '<button class="btn" onclick="reactivateAllBots()">Reactivar bot en todos</button>' : '') +
+        '</div>'
 
       if (queueLeads.length === 0) {
         html += '<div style="background:var(--surface);padding:60px;text-align:center;color:var(--text-soft);border:1px solid var(--border);border-radius:10px;">' +
@@ -1099,6 +1104,78 @@
       })
       if (r.ok) { toast("Bot reactivado para este lead"); renderHandoffQueue() }
       else toast(r.error || "Error", true)
+    }
+
+    async function renderBilling() {
+      const mc = document.getElementById("main-content")
+      mc.innerHTML = '<div class="handoff-view"><div style="color:#666;padding:40px;text-align:center;">Cargando...</div></div>'
+
+      const t = currentTenant || {}
+      const plan = t.plan || "custom"
+      const planNames = { starter: "Starter - $97/mes", pro: "Pro - $197/mes", agency: "Agency - $497/mes", custom: "Plan Custom" }
+      const features = t.features || {}
+      const activeCount = Object.values(features).filter(v => v === true).length
+
+      let html = '<div class="handoff-view" style="max-width:720px;margin:0 auto;">' +
+        '<h2 style="font-size:24px;margin-bottom:6px;">💳 Tu plan</h2>' +
+        '<p style="color:var(--text-soft);margin-bottom:20px;">Gestioná tu suscripción, cambia de plan o descarga facturas.</p>' +
+
+        '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:16px;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+            '<div><div style="font-size:12px;color:var(--text-soft);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;">Plan actual</div>' +
+            '<div style="font-size:24px;font-weight:700;margin-top:4px;">' + planNames[plan] + '</div></div>' +
+            '<span class="status-badge status-qualified">Activo</span>' +
+          '</div>' +
+          '<div style="font-size:13px;color:var(--text-soft);">Features activas: ' + activeCount + ' de 21</div>' +
+        '</div>' +
+
+        '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:16px;">' +
+          '<h3 style="font-size:15px;margin-bottom:14px;">Gestionar suscripción</h3>' +
+          '<p style="color:var(--text-soft);font-size:13px;margin-bottom:14px;">Cambiá de plan, actualizá tu tarjeta, o descargá facturas desde el portal de Stripe.</p>' +
+          '<button class="btn" id="portal-btn" onclick="openStripePortal()">Abrir portal de Stripe →</button>' +
+        '</div>' +
+
+        '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;">' +
+          '<h3 style="font-size:15px;margin-bottom:14px;">Upgrade / Downgrade</h3>' +
+          '<p style="color:var(--text-soft);font-size:13px;margin-bottom:14px;">Elegí otro plan. El cambio es inmediato y Stripe prorratea el importe.</p>' +
+          '<div style="display:flex;gap:10px;">' +
+            '<a href="pricing.html" class="btn btn-secondary" style="text-decoration:none;">Ver planes y precios</a>' +
+          '</div>' +
+        '</div>' +
+        '</div>'
+      mc.innerHTML = html
+    }
+
+    window.openStripePortal = async function() {
+      const btn = document.getElementById("portal-btn")
+      if (btn) { btn.disabled = true; btn.textContent = "Abriendo..." }
+      try {
+        const res = await fetch(SUPABASE_URL + "/functions/v1/stripe-portal", {
+          method: "POST",
+          headers: { "Authorization": "Bearer " + window.token },
+        })
+        const data = await res.json()
+        if (data.url) window.location.href = data.url
+        else toast(data.error || "No se pudo abrir el portal", true)
+      } catch (e) { toast(String(e), true) }
+      if (btn) { btn.disabled = false; btn.textContent = "Abrir portal de Stripe →" }
+    }
+
+    window.reactivateAllBots = async function() {
+      const slug = currentTenant?.slug || ""
+      const r = await api("?action=handoff-queue&tenant=" + slug)
+      const queueLeads = r.leads || []
+      if (!confirm("¿Reactivar el bot en los " + queueLeads.length + " leads pendientes?")) return
+      let ok = 0, fail = 0
+      for (const l of queueLeads) {
+        const r = await api("?action=toggle-ai", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sender_id: l.sender_id, ai_active: true }),
+        })
+        if (r.ok) ok++; else fail++
+      }
+      toast(ok + " reactivados" + (fail ? " · " + fail + " fallaron" : ""))
+      renderHandoffQueue()
     }
 
     function applyFeatureGating() {
@@ -1148,6 +1225,8 @@
         renderCampaigns()
       } else if (currentMainView === "handoff") {
         renderHandoffQueue()
+      } else if (currentMainView === "billing") {
+        renderBilling()
       } else {
         // inbox
         if (selectedLead) {
