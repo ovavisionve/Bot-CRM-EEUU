@@ -509,11 +509,11 @@
       </div>
     </div>
     <div class="main has-topnav" id="main">
-      <div class="top-nav">
-        <button class="nav-btn active" data-main-view="inbox" onclick="setMainView('inbox')">📥 Inbox</button>
-        <button class="nav-btn" data-main-view="pipeline" onclick="setMainView('pipeline')">📊 Pipeline</button>
-        <button class="nav-btn" data-main-view="analytics" onclick="setMainView('analytics')">📈 Analytics</button>
-        <button class="nav-btn" data-main-view="properties" onclick="setMainView('properties')">🏠 Propiedades</button>
+      <div class="top-nav" id="top-nav">
+        <button class="nav-btn active" data-main-view="inbox" data-feature="" onclick="setMainView('inbox')">📥 Inbox</button>
+        <button class="nav-btn" data-main-view="pipeline" data-feature="pipeline_kanban" onclick="setMainView('pipeline')">📊 Pipeline</button>
+        <button class="nav-btn" data-main-view="analytics" data-feature="analytics" onclick="setMainView('analytics')">📈 Analytics</button>
+        <button class="nav-btn" data-main-view="properties" data-feature="properties_editor" onclick="setMainView('properties')">🏠 Propiedades</button>
       </div>
       <div id="main-content" style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
         <div class="empty-state">
@@ -705,7 +705,23 @@
     document.getElementById("user-name").textContent = currentUser?.email || "Usuario"
     document.getElementById("tenant-name").textContent = currentTenant?.name || "-"
 
+    // Ocultar botones del top-nav según features contratadas
+    applyFeatureGating()
+
     await loadLeads()
+
+    function applyFeatureGating() {
+      const features = currentTenant?.features || {}
+      document.querySelectorAll(".nav-btn[data-feature]").forEach(btn => {
+        const f = btn.dataset.feature
+        if (!f) return
+        btn.style.display = features[f] ? "" : "none"
+      })
+    }
+
+    function hasFeature(name) {
+      return !!(currentTenant?.features || {})[name]
+    }
 
     window.setView = function(view) {
       currentView = view
@@ -764,10 +780,12 @@
       html += '<div class="props-header"><h2>Propiedades (' + propertiesCache.length + ')</h2>' +
         '<button class="btn" onclick="openNewPropModal()">+ Nueva propiedad</button></div>'
       html += sheetsNote
-      html += '<div class="export-bar">' +
-        '<span class="label">Exportar:</span>' +
-        '<button class="export-btn" onclick="downloadExport(\'properties\', \'csv\')">Propiedades CSV</button>' +
-        '</div>'
+      if (hasFeature("reports_export")) {
+        html += '<div class="export-bar">' +
+          '<span class="label">Exportar:</span>' +
+          '<button class="export-btn" onclick="downloadExport(\'properties\', \'csv\')">Propiedades CSV</button>' +
+          '</div>'
+      }
 
       if (propertiesCache.length === 0) {
         html += '<div style="padding:60px; text-align:center; color:#666;">Sin propiedades cargadas aún.<br>Clic en "+ Nueva propiedad" para empezar.</div>'
@@ -1028,7 +1046,7 @@
       }
       barsHTML += '</div>'
 
-      mc.innerHTML = '<div class="analytics">' +
+      const analyticsExportBar = hasFeature("reports_export") ? (
         '<div class="export-bar">' +
           '<span class="label">Exportar:</span>' +
           '<button class="export-btn" onclick="downloadExport(\'analytics\', \'csv\')">📊 Analytics CSV</button>' +
@@ -1036,7 +1054,11 @@
           '<button class="export-btn" onclick="downloadExport(\'leads\', \'csv\')">📇 Leads CSV</button>' +
           '<button class="export-btn" onclick="downloadExport(\'leads\', \'json\')">📇 Leads JSON</button>' +
           '<button class="export-btn" onclick="downloadExport(\'conversations\', \'csv\')">💬 Conversaciones CSV</button>' +
-        '</div>' +
+        '</div>'
+      ) : ''
+
+      mc.innerHTML = '<div class="analytics">' +
+        analyticsExportBar +
         '<h3>Resumen</h3>' +
         '<div class="stat-grid">' +
           '<div class="stat-card"><div class="label">Leads hoy</div><div class="value">' + t.leads_today + '</div></div>' +
@@ -1316,18 +1338,21 @@
           '</div>' +
         '</div>'
 
+      const editBtnHTML = hasFeature("lead_editing")
+        ? '<button class="edit-btn" onclick="openEditModal(\'' + lead.sender_id + '\')">Editar</button>' : ''
+      const exportChatBtnHTML = hasFeature("reports_export")
+        ? '<button class="edit-btn" onclick="downloadChat(\'' + lead.sender_id + '\')" title="Descargar conversación">⬇ CSV</button>' : ''
+      const composerFinalHTML = hasFeature("manual_messaging") ? composerHTML : ''
+
       main.innerHTML =
         '<div class="main-header">' +
-          '<h2>' + esc(name) +
-            '<button class="edit-btn" onclick="openEditModal(\'' + lead.sender_id + '\')">Editar</button>' +
-            '<button class="edit-btn" onclick="downloadChat(\'' + lead.sender_id + '\')" title="Descargar conversación">⬇ CSV</button>' +
-          '</h2>' +
+          '<h2>' + esc(name) + editBtnHTML + exportChatBtnHTML + '</h2>' +
           aiBadge +
         '</div>' +
         detailHTML +
         '<div class="chat-container">' +
           '<div class="chat" id="chat">' + (chatHTML || '<div class="empty-state" style="padding:40px 0;"><p>Sin mensajes aún</p></div>') + '</div>' +
-          composerHTML +
+          composerFinalHTML +
         '</div>'
 
       const chat = document.getElementById("chat")
