@@ -375,11 +375,16 @@
       }
     }
 
-    // Banner si el super admin está impersonando
+    // Banner + botón volver si el super admin está impersonando
     if (currentUser?.role === "super_admin" && impersonateSlug) {
+      const header = document.querySelector(".sidebar-header")
+      if (header) {
+        header.insertAdjacentHTML("beforeend",
+          '<a href="admin.html" style="background:#3b2f1e;color:#fbbf24;padding:4px 10px;border-radius:4px;font-size:11px;text-decoration:none;font-weight:600;">← Admin</a>')
+      }
       const chip = document.querySelector(".user-chip .who")
       if (chip) chip.insertAdjacentHTML("afterbegin",
-        '<div style="background:#3b2f1e;color:#fbbf24;padding:3px 8px;border-radius:4px;font-size:10px;display:inline-block;margin-bottom:4px;">SUPER ADMIN - VIENDO COMO TENANT</div>')
+        '<div style="background:#3b2f1e;color:#fbbf24;padding:3px 8px;border-radius:4px;font-size:10px;display:inline-block;margin-bottom:4px;">VIENDO COMO TENANT</div>')
     }
 
     document.getElementById("user-name").textContent = currentUser?.email || "Usuario"
