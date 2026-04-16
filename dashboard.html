@@ -476,6 +476,57 @@
     }
     .export-btn:hover { border-color: #6366f1; color: #c7d2fe; }
 
+    /* Properties view */
+    .props-view { padding: 20px 24px; overflow-y: auto; height: 100%; }
+    .props-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 16px;
+    }
+    .props-header h2 { font-size: 20px; }
+    .props-note {
+      background: #3b2f1e; color: #fbbf24;
+      padding: 10px 14px; border-radius: 8px;
+      font-size: 13px; margin-bottom: 16px;
+    }
+    .props-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 14px;
+    }
+    .prop-card {
+      background: #141414; border: 1px solid #2a2a2a;
+      border-radius: 10px; padding: 16px;
+      display: flex; flex-direction: column; gap: 8px;
+      cursor: pointer; transition: border 0.15s;
+    }
+    .prop-card:hover { border-color: #6366f1; }
+    .prop-card.inactive { opacity: 0.55; }
+    .prop-card .prop-name {
+      font-size: 15px; font-weight: 600; color: #e0e0e0;
+    }
+    .prop-card .prop-addr {
+      font-size: 12px; color: #888;
+    }
+    .prop-card .prop-price {
+      font-size: 18px; font-weight: 700; color: #34d399; margin-top: 4px;
+    }
+    .prop-card .prop-meta {
+      display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px;
+    }
+    .prop-meta span {
+      background: #1a1a1a; padding: 2px 8px; border-radius: 4px;
+      font-size: 11px; color: #aaa;
+    }
+    .prop-card .status-row {
+      display: flex; gap: 6px; margin-top: 6px;
+    }
+    .prop-badge {
+      font-size: 10px; padding: 2px 6px; border-radius: 4px;
+      font-weight: 600; text-transform: uppercase;
+    }
+    .prop-badge.avail { background: #1e3b2f; color: #34d399; }
+    .prop-badge.unavail { background: #3b1e1e; color: #f87171; }
+    .prop-badge.inactive { background: #3a2a2a; color: #888; }
+
     @media (max-width: 768px) {
       .sidebar { width: 100%; }
     }
@@ -511,6 +562,7 @@
         <button class="nav-btn active" data-main-view="inbox" onclick="setMainView('inbox')">📥 Inbox</button>
         <button class="nav-btn" data-main-view="pipeline" onclick="setMainView('pipeline')">📊 Pipeline</button>
         <button class="nav-btn" data-main-view="analytics" onclick="setMainView('analytics')">📈 Analytics</button>
+        <button class="nav-btn" data-main-view="properties" onclick="setMainView('properties')">🏠 Propiedades</button>
       </div>
       <div id="main-content" style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
         <div class="empty-state">
@@ -521,6 +573,51 @@
     </div>
   </div>
   <div class="toast" id="toast"></div>
+
+  <!-- Modal editar propiedad -->
+  <div class="modal-overlay" id="edit-prop-modal">
+    <div class="modal">
+      <h2 id="ep-title">Editar propiedad</h2>
+      <div class="modal-grid">
+        <div class="modal-full"><label>Nombre *</label><input id="ep-name" placeholder="Ej: Coral Terrace 2BR/2BA" /></div>
+        <div class="modal-full"><label>Dirección completa *</label><input id="ep-address" placeholder="2901 SW 69th Court, Miami FL 33155" /></div>
+        <div><label>Ciudad</label><input id="ep-city" /></div>
+        <div><label>Estado</label><input id="ep-state" /></div>
+        <div><label>ZIP</label><input id="ep-zip" /></div>
+        <div><label>Tipo</label><select id="ep-type">
+          <option value="">-</option>
+          <option value="apartment">Apartment</option>
+          <option value="house">House</option>
+          <option value="condo">Condo</option>
+          <option value="studio">Studio</option>
+        </select></div>
+        <div><label>Habitaciones</label><input id="ep-bedrooms" type="number" min="0" /></div>
+        <div><label>Baños</label><input id="ep-bathrooms" type="number" min="0" step="0.5" /></div>
+        <div><label>Sqft</label><input id="ep-sqft" type="number" /></div>
+        <div><label>Precio base $/mes *</label><input id="ep-price" type="number" /></div>
+        <div><label>Fees $/mes</label><input id="ep-fees" type="number" placeholder="70" /></div>
+        <div><label>Qué incluyen los fees</label><input id="ep-fees-incl" placeholder="Internet, trash, amenities" /></div>
+        <div><label>Parking 1ro $</label><input id="ep-parking1" type="number" /></div>
+        <div><label>Parking 2do $</label><input id="ep-parking2" type="number" /></div>
+        <div><label>Promociones</label><input id="ep-promo" placeholder="2do parking GRATIS" /></div>
+        <div><label>Crédito mínimo</label><input id="ep-min-credit" type="number" value="620" /></div>
+        <div><label>Mascotas permitidas</label><select id="ep-pets"><option value="true">Sí</option><option value="false">No</option></select></div>
+        <div><label>ESA aceptada</label><select id="ep-esa"><option value="true">Sí</option><option value="false">No</option></select></div>
+        <div><label>Disponible ahora</label><select id="ep-avail"><option value="true">Sí</option><option value="false">No</option></select></div>
+        <div><label>Disponible desde</label><input id="ep-avail-date" type="date" /></div>
+        <div><label>Prioridad (orden)</label><input id="ep-priority" type="number" value="0" /></div>
+        <div><label>Activa (bot la ofrece)</label><select id="ep-active"><option value="true">Sí</option><option value="false">No</option></select></div>
+        <div class="modal-full"><label>Notas internas</label><textarea id="ep-notes" rows="3"></textarea></div>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:20px; justify-content:space-between; align-items:center;">
+        <button class="btn btn-secondary" style="background:#dc2626;" id="ep-delete" onclick="deleteProperty()" style="display:none;">Eliminar</button>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-secondary" onclick="closePropModal()">Cancelar</button>
+          <button class="btn" onclick="savePropEdits()">Guardar</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Modal editar lead -->
   <div class="modal-overlay" id="edit-lead-modal">
@@ -685,14 +782,222 @@
         renderPipeline()
       } else if (currentMainView === "analytics") {
         renderAnalytics()
+      } else if (currentMainView === "properties") {
+        renderProperties()
       } else {
         // inbox
         if (selectedLead) {
           selectLead(selectedLead, /*skipRefresh*/ true)
         } else {
           document.getElementById("main-content").innerHTML =
-            '<div class="empty-state"><div class="icon-box">CRM</div><p>Selecciona un lead o cambia a Pipeline / Analytics</p></div>'
+            '<div class="empty-state"><div class="icon-box">CRM</div><p>Selecciona un lead o cambia a Pipeline / Analytics / Propiedades</p></div>'
         }
+      }
+    }
+
+    let propertiesCache = []
+
+    async function renderProperties() {
+      const mc = document.getElementById("main-content")
+      mc.innerHTML = '<div class="props-view"><div style="color:#666;">Cargando propiedades...</div></div>'
+
+      const data = await api("?action=properties")
+      propertiesCache = data.properties || []
+
+      const features = currentTenant?.features || {}
+      const sheetsNote = features.google_sheets_properties
+        ? '<div class="props-note">⚠️ El bot está leyendo las propiedades desde Google Sheets. Los cambios acá NO se reflejan en el bot hasta que desactives "Propiedades desde Sheets" o edites el Sheet.</div>'
+        : ''
+
+      let html = '<div class="props-view">'
+      html += '<div class="props-header"><h2>Propiedades (' + propertiesCache.length + ')</h2>' +
+        '<button class="btn" onclick="openNewPropModal()">+ Nueva propiedad</button></div>'
+      html += sheetsNote
+      html += '<div class="export-bar">' +
+        '<span class="label">Exportar:</span>' +
+        '<button class="export-btn" onclick="downloadExport(\'properties\', \'csv\')">Propiedades CSV</button>' +
+        '</div>'
+
+      if (propertiesCache.length === 0) {
+        html += '<div style="padding:60px; text-align:center; color:#666;">Sin propiedades cargadas aún.<br>Clic en "+ Nueva propiedad" para empezar.</div>'
+      } else {
+        html += '<div class="props-grid">'
+        for (const p of propertiesCache) {
+          const fees = p.fees || {}
+          const pets = p.pets_allowed ? "🐾 Pets OK" : "No pets"
+          const brba = (p.bedrooms != null && p.bathrooms != null)
+            ? p.bedrooms + "BR/" + p.bathrooms + "BA" : ""
+          const availBadge = p.available
+            ? '<span class="prop-badge avail">Disponible</span>'
+            : '<span class="prop-badge unavail">No disponible</span>'
+          const activeBadge = p.active
+            ? ''
+            : '<span class="prop-badge inactive">Inactiva</span>'
+          html += '<div class="prop-card ' + (p.active ? '' : 'inactive') + '" onclick="openEditPropModal(' + p.id + ')">' +
+            '<div class="prop-name">' + esc(p.name || "(sin nombre)") + '</div>' +
+            '<div class="prop-addr">' + esc(p.address || "") + '</div>' +
+            (p.base_price ? '<div class="prop-price">$' + p.base_price + '/mo' + (fees.monthly_fees ? ' <span style="font-size:12px; color:#888;">+ $' + fees.monthly_fees + ' fees</span>' : '') + '</div>' : '') +
+            '<div class="prop-meta">' +
+              (brba ? '<span>' + brba + '</span>' : '') +
+              (p.sqft ? '<span>' + p.sqft + ' sqft</span>' : '') +
+              '<span>Crédito ' + (p.min_credit_score || 620) + '+</span>' +
+              '<span>' + pets + '</span>' +
+            '</div>' +
+            '<div class="status-row">' + availBadge + activeBadge + '</div>' +
+          '</div>'
+        }
+        html += '</div>'
+      }
+      html += '</div>'
+      mc.innerHTML = html
+    }
+
+    window.openNewPropModal = function() {
+      document.getElementById("ep-title").textContent = "Nueva propiedad"
+      document.getElementById("edit-prop-modal").dataset.id = ""
+      document.getElementById("ep-delete").style.display = "none"
+      // Reset form
+      const fields = ["ep-name","ep-address","ep-city","ep-state","ep-zip","ep-type",
+                      "ep-bedrooms","ep-bathrooms","ep-sqft","ep-price","ep-fees","ep-fees-incl",
+                      "ep-parking1","ep-parking2","ep-promo","ep-avail-date","ep-notes"]
+      for (const f of fields) document.getElementById(f).value = ""
+      document.getElementById("ep-min-credit").value = 620
+      document.getElementById("ep-pets").value = "true"
+      document.getElementById("ep-esa").value = "true"
+      document.getElementById("ep-avail").value = "true"
+      document.getElementById("ep-active").value = "true"
+      document.getElementById("ep-priority").value = 0
+      document.getElementById("edit-prop-modal").classList.add("show")
+    }
+
+    window.openEditPropModal = function(id) {
+      const p = propertiesCache.find(x => x.id === id)
+      if (!p) return
+      document.getElementById("ep-title").textContent = "Editar: " + (p.name || "")
+      document.getElementById("edit-prop-modal").dataset.id = id
+      document.getElementById("ep-delete").style.display = "inline-block"
+
+      const fees = p.fees || {}
+      document.getElementById("ep-name").value = p.name || ""
+      document.getElementById("ep-address").value = p.address || ""
+      document.getElementById("ep-city").value = p.city || ""
+      document.getElementById("ep-state").value = p.state || ""
+      document.getElementById("ep-zip").value = p.zip || ""
+      document.getElementById("ep-type").value = p.type || ""
+      document.getElementById("ep-bedrooms").value = p.bedrooms ?? ""
+      document.getElementById("ep-bathrooms").value = p.bathrooms ?? ""
+      document.getElementById("ep-sqft").value = p.sqft ?? ""
+      document.getElementById("ep-price").value = p.base_price ?? ""
+      document.getElementById("ep-fees").value = fees.monthly_fees ?? ""
+      document.getElementById("ep-fees-incl").value = fees.includes || ""
+      document.getElementById("ep-parking1").value = fees.parking_1 ?? ""
+      document.getElementById("ep-parking2").value = fees.parking_2 ?? ""
+      document.getElementById("ep-promo").value = (p.promotions && p.promotions[0]?.description) || ""
+      document.getElementById("ep-min-credit").value = p.min_credit_score || 620
+      document.getElementById("ep-pets").value = p.pets_allowed ? "true" : "false"
+      document.getElementById("ep-esa").value = p.esa_allowed ? "true" : "false"
+      document.getElementById("ep-avail").value = p.available ? "true" : "false"
+      document.getElementById("ep-avail-date").value = p.available_date || ""
+      document.getElementById("ep-priority").value = p.priority || 0
+      document.getElementById("ep-active").value = p.active ? "true" : "false"
+      document.getElementById("ep-notes").value = p.notes || ""
+      document.getElementById("edit-prop-modal").classList.add("show")
+    }
+
+    window.closePropModal = function() {
+      document.getElementById("edit-prop-modal").classList.remove("show")
+    }
+
+    function collectPropForm() {
+      const num = id => {
+        const v = document.getElementById(id).value.trim()
+        if (v === "") return null
+        const n = Number(v); return isNaN(n) ? null : n
+      }
+      const val = id => document.getElementById(id).value.trim()
+
+      const fees = {}
+      const f1 = num("ep-fees"); if (f1 !== null) fees.monthly_fees = f1
+      const fi = val("ep-fees-incl"); if (fi) fees.includes = fi
+      const p1 = num("ep-parking1"); if (p1 !== null) fees.parking_1 = p1
+      const p2 = num("ep-parking2"); if (p2 !== null) fees.parking_2 = p2
+
+      const promoTxt = val("ep-promo")
+      const promotions = promoTxt ? [{ description: promoTxt, active: true }] : []
+
+      return {
+        name: val("ep-name"),
+        address: val("ep-address"),
+        city: val("ep-city") || null,
+        state: val("ep-state") || null,
+        zip: val("ep-zip") || null,
+        type: val("ep-type") || null,
+        bedrooms: num("ep-bedrooms"),
+        bathrooms: num("ep-bathrooms"),
+        sqft: num("ep-sqft"),
+        base_price: num("ep-price"),
+        fees: fees,
+        promotions: promotions,
+        min_credit_score: num("ep-min-credit") || 620,
+        pets_allowed: val("ep-pets") === "true",
+        esa_allowed: val("ep-esa") === "true",
+        available: val("ep-avail") === "true",
+        available_date: val("ep-avail-date") || null,
+        priority: num("ep-priority") || 0,
+        active: val("ep-active") === "true",
+        notes: val("ep-notes") || null,
+      }
+    }
+
+    window.savePropEdits = async function() {
+      const modal = document.getElementById("edit-prop-modal")
+      const id = modal.dataset.id
+      const body = collectPropForm()
+      if (!body.name || !body.address) { toast("Nombre y dirección son obligatorios", true); return }
+
+      let r
+      if (id) {
+        // Update
+        const fees_json = body.fees
+        const promos_json = body.promotions
+        delete body.fees; delete body.promotions
+        r = await api("?action=update-property", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: Number(id), updates: { ...body, fees: fees_json, promotions: promos_json } }),
+        })
+      } else {
+        r = await api("?action=create-property", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...body,
+            fees_json: body.fees,
+            promotions_json: body.promotions,
+          }),
+        })
+      }
+      if (r.ok) {
+        toast(id ? "Propiedad actualizada" : "Propiedad creada")
+        closePropModal()
+        renderProperties()
+      } else {
+        toast(r.error || "Error", true)
+      }
+    }
+
+    window.deleteProperty = async function() {
+      const id = document.getElementById("edit-prop-modal").dataset.id
+      if (!id) return
+      if (!confirm("¿Eliminar esta propiedad?")) return
+      const r = await api("?action=delete-property", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: Number(id) }),
+      })
+      if (r.ok) {
+        toast("Propiedad eliminada")
+        closePropModal()
+        renderProperties()
+      } else {
+        toast(r.error || "Error", true)
       }
     }
 

@@ -227,6 +227,102 @@ Deno.serve(async (req) => {
     return json({ ok: true })
   }
 
+  // ─── GET ?action=properties — listar propiedades del tenant ───
+  if (action === "properties") {
+    let tid: string | null = null
+    const slug = url.searchParams.get("tenant")
+    if (isSuperAdmin(user) && slug) {
+      const { data } = await supabase.from("tenants").select("id").eq("slug", slug).maybeSingle()
+      tid = data?.id || null
+    } else {
+      tid = user.tenant_id
+    }
+    if (!tid) return json({ properties: [] })
+    const { data } = await supabase
+      .from("properties")
+      .select("*")
+      .eq("tenant_id", tid)
+      .order("priority", { ascending: false })
+      .order("created_at", { ascending: false })
+    return json({ properties: data || [] })
+  }
+
+  // ─── POST ?action=create-property ───
+  if (req.method === "POST" && action === "create-property") {
+    const body = await req.json()
+    const tid = isSuperAdmin(user) && body.tenant_slug
+      ? (await supabase.from("tenants").select("id").eq("slug", body.tenant_slug).maybeSingle()).data?.id
+      : user.tenant_id
+    if (!tid) return json({ error: "No tenant" }, 404)
+    if (!canAccessTenant(user, tid)) return json({ error: "Forbidden" }, 403)
+
+    const { data, error } = await supabase
+      .from("properties")
+      .insert({
+        tenant_id: tid,
+        name: body.name,
+        address: body.address,
+        city: body.city,
+        state: body.state,
+        zip: body.zip,
+        type: body.type,
+        bedrooms: body.bedrooms,
+        bathrooms: body.bathrooms,
+        sqft: body.sqft,
+        base_price: body.base_price,
+        fees: body.fees_json || {},
+        promotions: body.promotions_json || [],
+        available: body.available !== false,
+        available_date: body.available_date || null,
+        min_credit_score: body.min_credit_score || 620,
+        pets_allowed: body.pets_allowed !== false,
+        esa_allowed: body.esa_allowed !== false,
+        active: body.active !== false,
+        priority: body.priority || 0,
+        notes: body.notes,
+      })
+      .select()
+      .single()
+    if (error) return json({ error: error.message }, 500)
+    return json({ ok: true, property: data })
+  }
+
+  // ─── POST ?action=update-property ───
+  if (req.method === "POST" && action === "update-property") {
+    const { id, updates } = await req.json()
+    const { data: p } = await supabase.from("properties").select("tenant_id").eq("id", id).maybeSingle()
+    if (!p) return json({ error: "Not found" }, 404)
+    if (!canAccessTenant(user, p.tenant_id)) return json({ error: "Forbidden" }, 403)
+
+    const allowed: Record<string, unknown> = {}
+    const whitelist = [
+      "name", "address", "city", "state", "zip", "type",
+      "bedrooms", "bathrooms", "sqft", "base_price",
+      "available", "available_date", "min_credit_score",
+      "pets_allowed", "esa_allowed", "active", "priority",
+      "notes", "fees", "promotions",
+    ]
+    for (const k of whitelist) if (k in updates) allowed[k] = updates[k]
+
+    const { error } = await supabase
+      .from("properties")
+      .update({ ...allowed, updated_at: new Date().toISOString() })
+      .eq("id", id)
+    if (error) return json({ error: error.message }, 500)
+    return json({ ok: true })
+  }
+
+  // ─── POST ?action=delete-property ───
+  if (req.method === "POST" && action === "delete-property") {
+    const { id } = await req.json()
+    const { data: p } = await supabase.from("properties").select("tenant_id").eq("id", id).maybeSingle()
+    if (!p) return json({ error: "Not found" }, 404)
+    if (!canAccessTenant(user, p.tenant_id)) return json({ error: "Forbidden" }, 403)
+    const { error } = await supabase.from("properties").delete().eq("id", id)
+    if (error) return json({ error: error.message }, 500)
+    return json({ ok: true })
+  }
+
   // ─── GET ?action=export&type=leads|conversations|properties|analytics&format=csv|json ───
   if (action === "export") {
     const type = url.searchParams.get("type") || "leads"
