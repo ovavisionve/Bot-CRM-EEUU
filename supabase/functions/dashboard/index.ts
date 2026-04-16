@@ -39,14 +39,10 @@ Deno.serve(async (req) => {
 
   const html = renderHTML(leads || [], conversacion, leadActivo, selectedSender)
 
-  const body = new TextEncoder().encode(html)
-  return new Response(body, {
-    status: 200,
-    headers: new Headers({
-      "content-type": "text/html; charset=utf-8",
-      "cache-control": "no-cache",
-    }),
-  })
+  return new Response(
+    new Blob([html], { type: "text/html; charset=utf-8" }),
+    { status: 200 }
+  )
 })
 
 function renderHTML(leads: any[], conversacion: any[], leadActivo: any, selectedSender: string | null): string {
