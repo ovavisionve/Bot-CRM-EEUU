@@ -354,15 +354,23 @@
     const urlParams = new URLSearchParams(window.location.search)
     const impersonateSlug = urlParams.get("tenant")
 
+    console.log("[dashboard] Usuario:", currentUser?.email, "role:", currentUser?.role)
+    console.log("[dashboard] URL search:", window.location.search)
+    console.log("[dashboard] impersonateSlug:", impersonateSlug)
+
     if (currentUser?.role === "super_admin") {
       if (impersonateSlug) {
-        // Cargar el tenant impersonado para mostrar SU CRM
+        console.log("[dashboard] Super admin impersonando:", impersonateSlug)
         const r = await api("?tenant=" + encodeURIComponent(impersonateSlug))
+        console.log("[dashboard] Tenant cargado:", r.tenant?.name)
         if (r.tenant) {
           currentTenant = r.tenant
+        } else {
+          alert("No se encontró el tenant: " + impersonateSlug)
+          window.location.href = "admin.html"
         }
       } else {
-        // Sin tenant en la URL -> el super admin va al admin panel
+        console.log("[dashboard] Super admin sin tenant en URL, redirigiendo a admin")
         window.location.href = "admin.html"
       }
     }
