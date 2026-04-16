@@ -414,6 +414,38 @@ Deno.serve(async (req) => {
       .update({ ...allowed, updated_at: new Date().toISOString() })
       .eq("id", id)
     if (error) return json({ error: error.message }, 500)
+
+    // Sync con Google Calendar via Apps Script webhook (si está configurado)
+    const calWebhook = Deno.env.get("CALENDAR_WEBHOOK_URL")
+    if (calWebhook && (allowed.scheduled_at || allowed.status)) {
+      try {
+        const { data: full } = await supabase
+          .from("tours")
+          .select("*, leads(name, sender_id), tenants(agent_email, agent_name)")
+          .eq("id", id)
+          .maybeSingle()
+        if (full) {
+          await fetch(calWebhook, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              token: "ova_calendar_secret_2026",
+              action: "upsert",
+              tour_id: id,
+              calendar_email: full.tenants?.agent_email,
+              title: `Tour: ${full.leads?.name || "Lead"}`,
+              description: `Tour agendado vía OVA REAL\nLead ID: ${full.leads?.sender_id}\nNotas: ${full.notes || ""}`,
+              start: full.scheduled_at,
+              duration_minutes: full.duration_minutes || 30,
+              status: full.status,
+            }),
+          }).catch((e) => console.error("[calendar] sync failed:", e))
+        }
+      } catch (err) {
+        console.error("[update-tour] calendar sync error:", err)
+      }
+    }
+
     return json({ ok: true })
   }
 

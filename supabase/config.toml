@@ -21,3 +21,7 @@ verify_jwt = false
 # SMS webhook (Twilio no manda Authorization)
 [functions.sms-webhook]
 verify_jwt = false
+
+# Tour reminders (disparado por pg_cron cada 30min)
+[functions.tour-reminders]
+verify_jwt = false
