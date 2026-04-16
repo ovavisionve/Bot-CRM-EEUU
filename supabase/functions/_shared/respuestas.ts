@@ -109,8 +109,35 @@ export async function generarRespuesta(
     const propiedades = await obtenerPropiedades(tenant.google_sheet_id)
     propiedadesTexto = formatearPropiedadesParaPrompt(propiedades)
   } else if (tenant?.id) {
-    // TODO: cargar desde tabla properties cuando implementemos esa fuente
-    console.log(`[respuestas] google_sheets_properties OFF para ${tenant.slug || tenant.id}`)
+    // Usar tabla properties de la DB
+    const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2")
+    const sb = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    )
+    const { data } = await sb
+      .from("properties")
+      .select("name, address, bedrooms, bathrooms, base_price, fees, promotions, min_credit_score, pets_allowed, notes, available")
+      .eq("tenant_id", tenant.id)
+      .eq("active", true)
+      .eq("available", true)
+      .order("priority", { ascending: false })
+    if (data && data.length > 0) {
+      propiedadesTexto = data.map((p: any) => {
+        let t = `- ${p.name}: ${p.address}`
+        if (p.bedrooms != null && p.bathrooms != null) t += ` (${p.bedrooms}BR/${p.bathrooms}BA)`
+        if (p.base_price) t += `\n  Price: $${p.base_price}/mo`
+        const fees = p.fees || {}
+        if (fees.monthly_fees) t += ` + $${fees.monthly_fees} fees`
+        if (fees.includes) t += ` (${fees.includes})`
+        if (fees.parking_1 != null) t += `\n  Parking: $${fees.parking_1}${fees.parking_2 != null ? `, 2nd $${fees.parking_2}` : ''}`
+        const promos = p.promotions || []
+        if (promos.length > 0) t += `\n  Promotion: ${promos.map((x: any) => x.description).join(', ')}`
+        if (p.min_credit_score) t += `\n  Min credit: ${p.min_credit_score}`
+        if (p.notes) t += `\n  Notes: ${p.notes}`
+        return t
+      }).join("\n\n")
+    }
   }
 
   const systemPrompt = buildSystemPrompt(propiedadesTexto, leadEstado, tenant, agentConfig)
