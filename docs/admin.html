@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OVA REAL - Admin Panel</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f0f0f;
+      color: #e0e0e0;
+      min-height: 100vh;
+    }
+    header {
+      background: #141414;
+      border-bottom: 1px solid #2a2a2a;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 { font-size: 18px; display: flex; align-items: center; gap: 10px; }
+    .logo { width: 32px; height: 32px; background: #6366f1; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
+    .btn {
+      background: #6366f1; color: white; border: none;
+      padding: 8px 16px; border-radius: 6px; cursor: pointer;
+      font-size: 13px; font-weight: 500;
+    }
+    .btn:hover { background: #5558d9; }
+    .btn-danger { background: #dc2626; }
+    .btn-secondary { background: #333; }
+    .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+    .login-screen {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 80vh;
+    }
+    .login-box {
+      background: #141414; padding: 32px; border-radius: 12px;
+      border: 1px solid #2a2a2a; width: 380px;
+    }
+    .login-box h2 { margin-bottom: 16px; }
+    .login-box input {
+      width: 100%; padding: 10px 12px; background: #0f0f0f;
+      color: #e0e0e0; border: 1px solid #333; border-radius: 6px;
+      margin-bottom: 12px; font-size: 14px;
+    }
+    .login-box .btn { width: 100%; padding: 10px; }
+
+    .tenant-card {
+      background: #141414;
+      border: 1px solid #2a2a2a;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .tenant-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #2a2a2a;
+    }
+    .tenant-info h3 { font-size: 18px; margin-bottom: 4px; }
+    .tenant-info .meta { font-size: 13px; color: #888; }
+    .badge {
+      padding: 3px 10px; border-radius: 12px; font-size: 11px;
+      font-weight: 600; text-transform: uppercase;
+      display: inline-block; margin-left: 8px;
+    }
+    .badge.plan-custom { background: #3b2f1e; color: #fbbf24; }
+    .badge.plan-starter { background: #1e3a5f; color: #60a5fa; }
+    .badge.plan-pro { background: #1e3b2f; color: #34d399; }
+    .badge.plan-agency { background: #2e1e3b; color: #a78bfa; }
+    .badge.status-active { background: #1e3b2f; color: #34d399; }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 10px;
+    }
+    .feature-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: #1a1a1a;
+      border-radius: 8px;
+      border: 1px solid #2a2a2a;
+    }
+    .feature-toggle label { font-size: 13px; cursor: pointer; flex: 1; }
+    .feature-toggle input[type="checkbox"] {
+      width: 36px; height: 20px; appearance: none; -webkit-appearance: none;
+      background: #333; border-radius: 10px; position: relative;
+      cursor: pointer; transition: background 0.2s;
+    }
+    .feature-toggle input[type="checkbox"]::before {
+      content: ""; position: absolute; width: 16px; height: 16px;
+      background: white; border-radius: 50%; top: 2px; left: 2px;
+      transition: left 0.2s;
+    }
+    .feature-toggle input[type="checkbox"]:checked {
+      background: #34d399;
+    }
+    .feature-toggle input[type="checkbox"]:checked::before { left: 18px; }
+
+    .feature-category {
+      font-size: 11px; color: #6366f1; text-transform: uppercase;
+      letter-spacing: 0.5px; font-weight: 600;
+      margin-top: 16px; margin-bottom: 8px;
+    }
+    .feature-category:first-child { margin-top: 0; }
+
+    .save-bar {
+      position: sticky; bottom: 16px; display: flex; justify-content: flex-end;
+      gap: 8px; margin-top: 16px;
+    }
+
+    .nav { display: flex; gap: 16px; margin-bottom: 24px; }
+    .nav a { color: #888; text-decoration: none; padding: 8px 16px; border-radius: 6px; font-size: 14px; }
+    .nav a:hover { background: #1a1a1a; color: #e0e0e0; }
+    .nav a.active { background: #6366f1; color: white; }
+
+    .toast {
+      position: fixed; bottom: 20px; right: 20px;
+      background: #34d399; color: #0f0f0f;
+      padding: 12px 20px; border-radius: 8px;
+      font-weight: 600; opacity: 0;
+      transition: opacity 0.3s;
+      z-index: 1000;
+    }
+    .toast.show { opacity: 1; }
+    .toast.error { background: #dc2626; color: white; }
+
+    /* Modal nuevo tenant */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+      display: none; align-items: center; justify-content: center;
+      z-index: 500;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: #141414; border: 1px solid #2a2a2a;
+      border-radius: 12px; padding: 24px; width: 560px;
+      max-height: 90vh; overflow-y: auto;
+    }
+    .modal h2 { margin-bottom: 16px; }
+    .modal label { display: block; font-size: 12px; color: #888; margin-bottom: 4px; margin-top: 10px; }
+    .modal input, .modal select {
+      width: 100%; padding: 8px 10px; background: #0f0f0f;
+      color: #e0e0e0; border: 1px solid #333; border-radius: 6px;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="login-screen" id="login-screen">
+      <div class="login-box">
+        <h2>OVA REAL - Admin</h2>
+        <p style="color: #888; font-size: 13px; margin-bottom: 16px;">Acceso sólo para OVA VISION</p>
+        <input type="password" id="admin-key-input" placeholder="Admin key" />
+        <button class="btn" onclick="login()">Entrar</button>
+      </div>
+    </div>
+
+    <div id="admin-screen" style="display:none;">
+      <header>
+        <h1><span class="logo">OR</span> OVA REAL - Admin</h1>
+        <div>
+          <button class="btn" onclick="openNewTenantModal()">+ Nuevo cliente</button>
+          <button class="btn btn-secondary" onclick="logout()">Salir</button>
+        </div>
+      </header>
+      <div class="container">
+        <div class="nav">
+          <a href="dashboard.html">Dashboard</a>
+          <a href="admin.html" class="active">Admin / Features</a>
+        </div>
+        <div id="tenants-container">
+          <div style="text-align:center; padding:60px; color:#666;">Cargando clientes...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="new-tenant-modal">
+      <div class="modal">
+        <h2>Nuevo cliente (tenant)</h2>
+        <label>Nombre del negocio</label>
+        <input id="nt-name" placeholder="Ej: María Real Estate" />
+        <label>Slug (URL-safe)</label>
+        <input id="nt-slug" placeholder="Ej: maria-re" />
+        <label>Nombre del agente</label>
+        <input id="nt-agent-name" placeholder="Ej: María González" />
+        <label>Email del agente</label>
+        <input id="nt-agent-email" type="email" placeholder="maria@ejemplo.com" />
+        <label>Teléfono / WhatsApp</label>
+        <input id="nt-agent-phone" placeholder="+1..." />
+        <label>Idioma preferido</label>
+        <select id="nt-lang">
+          <option value="en">English</option>
+          <option value="es">Español</option>
+        </select>
+        <label>Instagram User ID (del receptor, se ve en Meta API Setup)</label>
+        <input id="nt-ig-id" placeholder="17841..." />
+        <label>Instagram handle</label>
+        <input id="nt-ig-handle" placeholder="maria_re" />
+        <label>Instagram Access Token (IGAA...)</label>
+        <input id="nt-ig-token" placeholder="IGAAM..." />
+        <label>Google Sheet ID de propiedades (opcional)</label>
+        <input id="nt-sheet-id" placeholder="1Z-4G..." />
+        <label>Plan</label>
+        <select id="nt-plan">
+          <option value="starter">Starter</option>
+          <option value="pro">Pro</option>
+          <option value="agency">Agency</option>
+          <option value="custom">Custom</option>
+        </select>
+        <div style="display:flex; gap:8px; margin-top:20px; justify-content:flex-end;">
+          <button class="btn btn-secondary" onclick="closeNewTenantModal()">Cancelar</button>
+          <button class="btn" onclick="createTenant()">Crear</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+  </div>
+
+  <script>
+    const API = "https://vrfydffwczomvuoigwsm.supabase.co/functions/v1/dashboard";
+    let adminKey = localStorage.getItem("ova_admin_key") || "";
+    let tenantsCache = [];
+
+    const FEATURE_CATEGORIES = {
+      "Canales": ["instagram_bot", "sms_bot"],
+      "Core IA": ["ai_responses", "ai_memory_extraction", "custom_bot_voice", "multi_language"],
+      "Datos & Propiedades": ["google_sheets_properties", "dashboard_access"],
+      "Automatizaciones": ["auto_followups", "drip_campaigns", "handoff_to_human"],
+      "Notificaciones": ["admin_email_notifications"],
+      "Premium": ["lead_scoring", "analytics", "white_label", "tour_calendar"],
+    };
+    const FEATURE_LABELS = {
+      instagram_bot: "Bot de Instagram DMs",
+      ai_responses: "Respuestas con IA",
+      google_sheets_properties: "Propiedades desde Google Sheets",
+      ai_memory_extraction: "Memoria estructurada (reduce errores)",
+      auto_followups: "Follow-ups automáticos (24/48/72h)",
+      admin_email_notifications: "Notificaciones por email al admin",
+      handoff_to_human: "Handoff a humano (pausar bot)",
+      multi_language: "Soporte multilingüe (ES/EN)",
+      dashboard_access: "Acceso al dashboard CRM",
+      sms_bot: "Bot por SMS (Twilio)",
+      drip_campaigns: "Drip campaigns personalizadas",
+      lead_scoring: "Lead scoring automático",
+      analytics: "Analytics y métricas",
+      white_label: "White-label (branding propio)",
+      tour_calendar: "Calendario de tours integrado",
+      custom_bot_voice: "Voz personalizada del bot",
+    };
+
+    if (adminKey) {
+      showAdmin();
+      loadTenants();
+    } else {
+      document.getElementById("login-screen").style.display = "flex";
+    }
+
+    function login() {
+      const key = document.getElementById("admin-key-input").value.trim();
+      if (!key) return;
+      adminKey = key;
+      localStorage.setItem("ova_admin_key", key);
+      showAdmin();
+      loadTenants();
+    }
+
+    function logout() {
+      localStorage.removeItem("ova_admin_key");
+      location.reload();
+    }
+
+    function showAdmin() {
+      document.getElementById("login-screen").style.display = "none";
+      document.getElementById("admin-screen").style.display = "block";
+    }
+
+    async function loadTenants() {
+      try {
+        const res = await fetch(API + "?tenants=1");
+        const data = await res.json();
+        tenantsCache = data.tenants || [];
+        renderTenants(data.stats || {});
+      } catch (err) {
+        toast("Error cargando clientes", true);
+      }
+    }
+
+    function renderTenants(stats) {
+      const container = document.getElementById("tenants-container");
+      if (tenantsCache.length === 0) {
+        container.innerHTML = '<div style="text-align:center; padding:60px; color:#666;">Sin clientes aún. Click en "+ Nuevo cliente" para empezar.</div>';
+        return;
+      }
+      container.innerHTML = tenantsCache.map(t => renderTenantCard(t, stats[t.id] || {})).join("");
+    }
+
+    function renderTenantCard(t, stats) {
+      const features = t.features || {};
+      let featuresHTML = "";
+      for (const category of Object.keys(FEATURE_CATEGORIES)) {
+        featuresHTML += '<div class="feature-category">' + category + '</div><div class="features-grid">';
+        for (const key of FEATURE_CATEGORIES[category]) {
+          const checked = features[key] ? "checked" : "";
+          featuresHTML += '<div class="feature-toggle"><label for="' + t.slug + '-' + key + '">' + FEATURE_LABELS[key] + '</label>' +
+            '<input type="checkbox" id="' + t.slug + '-' + key + '" data-slug="' + t.slug + '" data-feature="' + key + '" ' + checked + ' /></div>';
+        }
+        featuresHTML += '</div>';
+      }
+      return (
+        '<div class="tenant-card">' +
+          '<div class="tenant-header">' +
+            '<div class="tenant-info">' +
+              '<h3>' + esc(t.name) + ' <span class="badge plan-' + t.plan + '">' + t.plan + '</span>' +
+              (t.status === "active" ? '<span class="badge status-active">Active</span>' : '') +
+              '</h3>' +
+              '<div class="meta">' +
+                (t.instagram_handle ? '@' + esc(t.instagram_handle) + ' · ' : '') +
+                esc(t.agent_email || '') + ' · ' +
+                'Leads: ' + (stats.leads || 0) +
+              '</div>' +
+            '</div>' +
+            '<button class="btn" data-slug="' + t.slug + '" onclick="saveFeatures(\'' + t.slug + '\')">Guardar</button>' +
+          '</div>' +
+          featuresHTML +
+        '</div>'
+      );
+    }
+
+    async function saveFeatures(slug) {
+      const inputs = document.querySelectorAll('[data-slug="' + slug + '"][data-feature]');
+      const features = {};
+      inputs.forEach(i => { features[i.dataset.feature] = i.checked; });
+
+      try {
+        const res = await fetch(API + "?action=update-features&admin_key=" + encodeURIComponent(adminKey), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ slug, features }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          toast("Features guardadas");
+          loadTenants();
+        } else {
+          toast(data.error || "Error", true);
+        }
+      } catch (err) {
+        toast("Error de red", true);
+      }
+    }
+
+    function openNewTenantModal() {
+      document.getElementById("new-tenant-modal").classList.add("show");
+    }
+    function closeNewTenantModal() {
+      document.getElementById("new-tenant-modal").classList.remove("show");
+    }
+
+    async function createTenant() {
+      const body = {
+        name: document.getElementById("nt-name").value.trim(),
+        slug: document.getElementById("nt-slug").value.trim(),
+        agent_name: document.getElementById("nt-agent-name").value.trim(),
+        agent_email: document.getElementById("nt-agent-email").value.trim(),
+        agent_phone: document.getElementById("nt-agent-phone").value.trim(),
+        agent_language: document.getElementById("nt-lang").value,
+        instagram_user_id: document.getElementById("nt-ig-id").value.trim(),
+        instagram_handle: document.getElementById("nt-ig-handle").value.trim(),
+        instagram_access_token: document.getElementById("nt-ig-token").value.trim(),
+        google_sheet_id: document.getElementById("nt-sheet-id").value.trim(),
+        plan: document.getElementById("nt-plan").value,
+      };
+      if (!body.name || !body.slug || !body.agent_name || !body.agent_email) {
+        return toast("Nombre, slug, agente y email son obligatorios", true);
+      }
+      try {
+        const res = await fetch(API + "?action=create-tenant&admin_key=" + encodeURIComponent(adminKey), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          toast("Cliente creado");
+          closeNewTenantModal();
+          loadTenants();
+        } else {
+          toast(data.error || "Error", true);
+        }
+      } catch (err) {
+        toast("Error de red", true);
+      }
+    }
+
+    function toast(msg, isError) {
+      const el = document.getElementById("toast");
+      el.textContent = msg;
+      el.className = "toast show" + (isError ? " error" : "");
+      setTimeout(() => el.className = "toast", 2500);
+    }
+
+    function esc(s) {
+      if (s === null || s === undefined) return "";
+      var d = document.createElement("div");
+      d.textContent = String(s);
+      return d.innerHTML;
+    }
+  </script>
+</body>
+</html>
