@@ -48,7 +48,17 @@ Deno.serve(async (req) => {
       }
 
       for (const entry of body.entry || []) {
-        for (const event of entry.messaging || []) {
+        // Instagram Graph API manda los eventos en 2 formatos distintos:
+        // 1. entry.messaging[]           (formato Messenger)
+        // 2. entry.changes[] con field="messages"  (formato Instagram v5+)
+        const messagingEvents = entry.messaging || []
+        const changesEvents = (entry.changes || [])
+          .filter((c: any) => c.field === "messages" || c.field === "message_reactions")
+          .map((c: any) => c.value)
+
+        const eventos = [...messagingEvents, ...changesEvents]
+
+        for (const event of eventos) {
           const senderId = event.sender?.id
           const mensaje = event.message?.text || ""
 
@@ -60,6 +70,12 @@ Deno.serve(async (req) => {
           // Ignorar mensajes que nosotros mismos enviamos (echo)
           if (event.message?.is_echo) {
             console.log("[webhook:POST] Echo ignorado")
+            continue
+          }
+
+          // Ignorar el evento de prueba de Meta (sender.id="12334")
+          if (senderId === "12334") {
+            console.log("[webhook:POST] Evento de prueba de Meta ignorado")
             continue
           }
 

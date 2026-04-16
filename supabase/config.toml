@@ -1,3 +1,7 @@
 # El webhook debe ser público (Meta no envía Authorization header)
 [functions.webhook]
 verify_jwt = false
+
+# Dashboard público (proteger con auth propia más adelante)
+[functions.dashboard]
+verify_jwt = false
