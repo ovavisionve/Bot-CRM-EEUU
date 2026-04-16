@@ -60,6 +60,49 @@
     .tab.active { color: #6366f1; border-bottom-color: #6366f1; }
     .tab:hover { color: #e0e0e0; }
 
+    .search-bar {
+      padding: 10px 14px;
+      border-bottom: 1px solid #2a2a2a;
+      background: #141414;
+      position: relative;
+    }
+    .search-bar input {
+      width: 100%;
+      padding: 8px 32px 8px 30px;
+      background: #0f0f0f;
+      color: #e0e0e0;
+      border: 1px solid #2a2a2a;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    .search-bar input:focus { outline: none; border-color: #6366f1; }
+    .search-bar::before {
+      content: "🔍";
+      position: absolute;
+      left: 22px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 11px;
+      opacity: 0.5;
+      pointer-events: none;
+    }
+    .search-bar .clear {
+      position: absolute;
+      right: 22px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: #666;
+      cursor: pointer;
+      font-size: 16px;
+      padding: 0;
+      line-height: 1;
+      display: none;
+    }
+    .search-bar .clear.show { display: block; }
+    .search-bar .clear:hover { color: #e0e0e0; }
+
     .panel-content { flex: 1; overflow-y: auto; }
 
     /* Pipeline Kanban (en vista leads cuando está colapsado) */
@@ -363,6 +406,10 @@
         <button class="tab active" data-view="leads" onclick="setView('leads')">Leads</button>
         <button class="tab" data-view="config" onclick="setView('config')">Config</button>
       </div>
+      <div class="search-bar" id="search-bar">
+        <input type="text" id="search-input" placeholder="Buscar por nombre, email, ID..." autocomplete="off" />
+        <button class="clear" id="search-clear" onclick="clearSearch()">✕</button>
+      </div>
       <div class="panel-content" id="sidebar-content">
         <div style="padding:40px; text-align:center; color:#666;">Cargando...</div>
       </div>
@@ -458,6 +505,7 @@
     let currentTenant = null
     let selectedLead = null
     let leads = []
+    let searchTerm = ""
     let currentView = "leads"       // sidebar tab: leads | config
     let currentMainView = "inbox"   // main area: inbox | pipeline
 
@@ -663,14 +711,37 @@
       if (currentView === "leads" && currentMainView === "pipeline") renderPipeline()
     }
 
+    function filterLeads() {
+      if (!searchTerm) return leads
+      const q = searchTerm.toLowerCase()
+      return leads.filter(l => {
+        return (l.name || "").toLowerCase().includes(q)
+          || (l.sender_id || "").toLowerCase().includes(q)
+          || (l.email || "").toLowerCase().includes(q)
+          || (l.phone || "").toLowerCase().includes(q)
+          || (l.instagram_handle || "").toLowerCase().includes(q)
+          || (l.partner_name || "").toLowerCase().includes(q)
+          || (l.selected_property_name || "").toLowerCase().includes(q)
+          || (l.status || "").toLowerCase().includes(q)
+      })
+    }
+
     function renderLeadsList() {
       const content = document.getElementById("sidebar-content")
-      content.innerHTML = '<div class="lead-count">Leads (' + leads.length + ')</div>'
+      const filtered = filterLeads()
+      const countLabel = searchTerm
+        ? 'Leads (' + filtered.length + ' de ' + leads.length + ')'
+        : 'Leads (' + leads.length + ')'
+      content.innerHTML = '<div class="lead-count">' + countLabel + '</div>'
       if (leads.length === 0) {
         content.innerHTML += '<div style="padding:40px; text-align:center; color:#666; font-size:13px;">Sin leads aún.<br>Cuando alguien te escriba por IG aparece acá.</div>'
         return
       }
-      content.innerHTML += leads.map(function(l) {
+      if (filtered.length === 0) {
+        content.innerHTML += '<div style="padding:40px; text-align:center; color:#666; font-size:13px;">Sin resultados para "' + esc(searchTerm) + '"</div>'
+        return
+      }
+      content.innerHTML += filtered.map(function(l) {
         const isActive = l.sender_id === selectedLead
         const name = l.name || "Lead " + l.sender_id
         const initial = name.charAt(0).toUpperCase()
@@ -688,6 +759,21 @@
         '</div>'
       }).join("")
     }
+
+    window.clearSearch = function() {
+      searchTerm = ""
+      const input = document.getElementById("search-input")
+      if (input) input.value = ""
+      document.getElementById("search-clear").classList.remove("show")
+      renderLeadsList()
+    }
+
+    // Bindear input de búsqueda (una sola vez)
+    document.getElementById("search-input").addEventListener("input", function(e) {
+      searchTerm = e.target.value.trim()
+      document.getElementById("search-clear").classList.toggle("show", searchTerm.length > 0)
+      renderLeadsList()
+    })
 
     async function selectLead(senderId, skipRefresh) {
       selectedLead = senderId
