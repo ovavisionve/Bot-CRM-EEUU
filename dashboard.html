@@ -665,6 +665,7 @@
         <button class="nav-btn" data-main-view="tours" data-feature="tour_calendar" onclick="setMainView('tours')">📅 Tours</button>
         <button class="nav-btn" data-main-view="campaigns" data-feature="drip_campaigns" onclick="setMainView('campaigns')">🎯 Campañas</button>
         <button class="nav-btn" data-main-view="handoff" data-feature="handoff_to_human" onclick="setMainView('handoff')">🚨 Handoff <span id="handoff-count" style="background:#fa383e;color:white;border-radius:10px;padding:1px 6px;font-size:10px;display:none;margin-left:4px;"></span></button>
+        <button class="nav-btn" data-main-view="team" data-feature="white_label" onclick="setMainView('team')">👥 Equipo</button>
         <button class="nav-btn" data-main-view="billing" data-feature="" onclick="setMainView('billing')">💳 Plan</button>
       </div>
       <div id="main-content" style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
@@ -912,10 +913,12 @@
     }
 
     document.getElementById("user-name").textContent = currentUser?.email || "Usuario"
-    document.getElementById("tenant-name").textContent = currentTenant?.name || "-"
+    document.getElementById("tenant-name").textContent = currentTenant?.company_name || currentTenant?.name || "-"
 
     // Ocultar botones del top-nav según features contratadas
     applyFeatureGating()
+    // Aplicar branding si tiene white_label activo
+    if (currentTenant?.features?.white_label) applyBranding()
 
     await loadLeads()
 
@@ -1106,6 +1109,202 @@
       else toast(r.error || "Error", true)
     }
 
+    let teamTab = "agents"
+    async function renderTeam() {
+      const mc = document.getElementById("main-content")
+      mc.innerHTML = '<div class="handoff-view"><div style="color:#666;padding:40px;text-align:center;">Cargando...</div></div>'
+
+      const slug = currentTenant?.slug || ""
+      const [agRes, stRes] = await Promise.all([
+        api("?action=agents&tenant=" + slug),
+        api("?action=team-stats&tenant=" + slug),
+      ])
+      const agents = agRes.agents || []
+      const stats = stRes.stats || []
+
+      const isAdmin = currentUser?.role === "tenant_admin" || currentUser?.role === "super_admin"
+
+      let html = '<div class="handoff-view" style="max-width:900px;margin:0 auto;">' +
+        '<h2 style="font-size:24px;margin-bottom:6px;">👥 Equipo</h2>' +
+        '<p style="color:var(--text-soft);margin-bottom:20px;">Gestiona los agentes que tienen acceso al CRM.</p>' +
+        '<div style="display:flex;gap:8px;margin-bottom:20px;">' +
+          '<button class="nav-btn ' + (teamTab==="agents"?"active":"") + '" onclick="setTeamTab(\'agents\')">Agentes (' + agents.length + ')</button>' +
+          '<button class="nav-btn ' + (teamTab==="leaderboard"?"active":"") + '" onclick="setTeamTab(\'leaderboard\')">📊 Leaderboard</button>' +
+          '<button class="nav-btn ' + (teamTab==="branding"?"active":"") + '" onclick="setTeamTab(\'branding\')">🎨 Branding</button>' +
+        '</div>'
+
+      if (teamTab === "agents") {
+        html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;">'
+        if (isAdmin) {
+          html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">' +
+            '<h3 style="font-size:16px;">Agentes del equipo</h3>' +
+            '<button class="btn" onclick="openInviteAgent()">+ Invitar agente</button></div>'
+        }
+        if (agents.length === 0) {
+          html += '<div style="color:var(--text-muted);padding:30px;text-align:center;">Sin agentes aún.</div>'
+        } else {
+          html += '<table style="width:100%;border-collapse:collapse;">' +
+            '<thead><tr style="border-bottom:1px solid var(--border);">' +
+              '<th style="text-align:left;padding:10px 8px;font-size:11px;color:var(--text-soft);text-transform:uppercase;">Nombre</th>' +
+              '<th style="text-align:left;padding:10px 8px;font-size:11px;color:var(--text-soft);text-transform:uppercase;">Email</th>' +
+              '<th style="text-align:left;padding:10px 8px;font-size:11px;color:var(--text-soft);text-transform:uppercase;">Rol</th>' +
+              '<th style="text-align:left;padding:10px 8px;font-size:11px;color:var(--text-soft);text-transform:uppercase;">Estado</th>' +
+              (isAdmin ? '<th style="text-align:right;padding:10px 8px;"></th>' : '') +
+            '</tr></thead><tbody>'
+          for (const a of agents) {
+            html += '<tr style="border-bottom:1px solid var(--border);">' +
+              '<td style="padding:12px 8px;">' + esc(a.name || a.email.split("@")[0]) + '</td>' +
+              '<td style="padding:12px 8px;color:var(--text-soft);font-size:13px;">' + esc(a.email) + '</td>' +
+              '<td style="padding:12px 8px;"><span class="status-badge status-' + (a.role==="tenant_admin"?"qualified":"contacted") + '">' + a.role + '</span></td>' +
+              '<td style="padding:12px 8px;">' + (a.active === false ? '<span class="status-badge status-disqualified">Inactivo</span>' : '<span class="status-badge status-qualified">Activo</span>') + '</td>'
+            if (isAdmin) {
+              html += '<td style="padding:12px 8px;text-align:right;">' +
+                (a.role !== "tenant_admin" || a.id !== currentUser.id
+                  ? '<button class="edit-btn" onclick="deleteAgent(\'' + a.id + '\', \'' + esc(a.email) + '\')">Borrar</button>'
+                  : '<span style="color:var(--text-muted);font-size:12px;">tú</span>') +
+              '</td>'
+            }
+            html += '</tr>'
+          }
+          html += '</tbody></table>'
+        }
+        html += '</div>'
+      } else if (teamTab === "leaderboard") {
+        html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;">' +
+          '<h3 style="font-size:16px;margin-bottom:14px;">Top performers</h3>'
+        if (stats.length === 0) {
+          html += '<div style="color:var(--text-muted);padding:30px;text-align:center;">Sin data aún.</div>'
+        } else {
+          html += '<table style="width:100%;border-collapse:collapse;">' +
+            '<thead><tr style="border-bottom:1px solid var(--border);">' +
+              '<th style="text-align:left;padding:10px 8px;font-size:11px;color:var(--text-soft);text-transform:uppercase;">#</th>' +
+              '<th style="text-align:left;padding:10px 8px;font-size:11px;color:var(--text-soft);text-transform:uppercase;">Agente</th>' +
+              '<th style="text-align:center;padding:10px 8px;font-size:11px;color:var(--text-soft);text-transform:uppercase;">Leads</th>' +
+              '<th style="text-align:center;padding:10px 8px;font-size:11px;color:var(--text-soft);text-transform:uppercase;">Calificados</th>' +
+              '<th style="text-align:center;padding:10px 8px;font-size:11px;color:var(--text-soft);text-transform:uppercase;">Cerrados</th>' +
+              '<th style="text-align:center;padding:10px 8px;font-size:11px;color:var(--text-soft);text-transform:uppercase;">Msgs manuales</th>' +
+            '</tr></thead><tbody>'
+          let rank = 1
+          for (const s of stats) {
+            const medal = rank===1?"🥇":rank===2?"🥈":rank===3?"🥉":""
+            html += '<tr style="border-bottom:1px solid var(--border);">' +
+              '<td style="padding:12px 8px;font-weight:700;">' + medal + rank + '</td>' +
+              '<td style="padding:12px 8px;">' + esc(s.agent.name || s.agent.email) + '</td>' +
+              '<td style="padding:12px 8px;text-align:center;">' + s.total_leads + '</td>' +
+              '<td style="padding:12px 8px;text-align:center;">' + s.qualified + '</td>' +
+              '<td style="padding:12px 8px;text-align:center;font-weight:700;color:var(--success);">' + s.closed_won + '</td>' +
+              '<td style="padding:12px 8px;text-align:center;">' + s.agent_messages + '</td>' +
+            '</tr>'
+            rank++
+          }
+          html += '</tbody></table>'
+        }
+        html += '</div>'
+      } else if (teamTab === "branding") {
+        const features = currentTenant?.features || {}
+        if (!features.white_label) {
+          html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:40px;text-align:center;color:var(--text-soft);">' +
+            '<h3 style="color:var(--warn);margin-bottom:8px;">White-label no está activo</h3>' +
+            '<p>Esta feature solo está disponible en el plan Agency. Contactá a OVA VISION para activarla.</p>' +
+          '</div>'
+        } else {
+          const t = currentTenant || {}
+          html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;">' +
+            '<h3 style="font-size:16px;margin-bottom:14px;">Branding personalizado</h3>' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">' +
+              '<div><label style="font-size:12px;color:var(--text-soft);">Nombre de tu empresa</label>' +
+              '<input id="br-company" value="' + esc(t.company_name || t.name || "") + '" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;margin-top:4px;"/></div>' +
+              '<div><label style="font-size:12px;color:var(--text-soft);">Email de soporte</label>' +
+              '<input id="br-support" value="' + esc(t.support_email || "") + '" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;margin-top:4px;"/></div>' +
+              '<div><label style="font-size:12px;color:var(--text-soft);">Color primario</label>' +
+              '<input id="br-color" type="color" value="' + (t.brand_color || "#1877f2") + '" style="width:100%;padding:4px;border:1px solid var(--border);border-radius:6px;margin-top:4px;height:40px;"/></div>' +
+              '<div><label style="font-size:12px;color:var(--text-soft);">Color de acento</label>' +
+              '<input id="br-accent" type="color" value="' + (t.accent_color || "#42b72a") + '" style="width:100%;padding:4px;border:1px solid var(--border);border-radius:6px;margin-top:4px;height:40px;"/></div>' +
+              '<div style="grid-column:1/-1;"><label style="font-size:12px;color:var(--text-soft);">URL del logo (PNG/JPG)</label>' +
+              '<input id="br-logo" value="' + esc(t.logo_url || "") + '" placeholder="https://..." style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;margin-top:4px;"/></div>' +
+            '</div>' +
+            '<button class="btn" onclick="saveBranding()" style="margin-top:16px;">Guardar branding</button>' +
+            (t.logo_url ? '<div style="margin-top:20px;padding-top:20px;border-top:1px solid var(--border);"><label style="font-size:12px;color:var(--text-soft);">Preview logo:</label><br><img src="' + esc(t.logo_url) + '" style="max-height:50px;margin-top:8px;"/></div>' : '') +
+          '</div>'
+        }
+      }
+
+      html += '</div>'
+      mc.innerHTML = html
+    }
+
+    window.setTeamTab = function(tab) {
+      teamTab = tab
+      renderTeam()
+    }
+
+    window.openInviteAgent = function() {
+      const email = prompt("Email del agente nuevo:")
+      if (!email) return
+      const password = prompt("Password inicial (min 6 caracteres):")
+      if (!password || password.length < 6) return toast("Password muy corto", true)
+      const name = prompt("Nombre completo:")
+      const phone = prompt("Teléfono / WhatsApp (opcional):") || ""
+      const role = confirm("¿Darle rol de administrador del tenant?\nOK = tenant_admin (ve todo)\nCancelar = agent (solo sus leads)") ? "tenant_admin" : "agent"
+
+      api("?action=invite-agent", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, name, phone, role }),
+      }).then(r => {
+        if (r.ok) { toast("Agente invitado (email enviado)"); renderTeam() }
+        else toast(r.error || "Error", true)
+      })
+    }
+
+    window.deleteAgent = async function(id, email) {
+      if (!confirm("¿Borrar a " + email + "? No se puede deshacer.")) return
+      const r = await api("?action=delete-agent", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      })
+      if (r.ok) { toast("Agente borrado"); renderTeam() }
+      else toast(r.error || "Error", true)
+    }
+
+    window.saveBranding = async function() {
+      const body = {
+        company_name: document.getElementById("br-company").value,
+        support_email: document.getElementById("br-support").value,
+        brand_color: document.getElementById("br-color").value,
+        accent_color: document.getElementById("br-accent").value,
+        logo_url: document.getElementById("br-logo").value,
+      }
+      const r = await api("?action=update-branding", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+      if (r.ok) {
+        toast("Branding guardado. Recargando...")
+        // Reload currentTenant y aplicar nuevos colores
+        const me = await api("?action=me")
+        currentTenant = me.tenant
+        applyBranding()
+        renderTeam()
+      } else toast(r.error || "Error", true)
+    }
+
+    function applyBranding() {
+      const t = currentTenant || {}
+      if (t.brand_color) document.documentElement.style.setProperty("--brand", t.brand_color)
+      if (t.accent_color) document.documentElement.style.setProperty("--success", t.accent_color)
+      // Actualizar el logo si tiene
+      const logo = document.querySelector(".sidebar-header .logo")
+      if (logo && t.logo_url) {
+        logo.innerHTML = '<img src="' + t.logo_url + '" style="width:100%;height:100%;object-fit:contain;border-radius:8px;">'
+      }
+      // Actualizar el nombre si tiene company_name
+      const h1 = document.querySelector(".sidebar-header h1")
+      if (h1 && t.company_name) {
+        const span = h1.querySelector("span")
+        h1.innerHTML = (span ? span.outerHTML + " " : "") + esc(t.company_name)
+      }
+    }
+
     async function renderBilling() {
       const mc = document.getElementById("main-content")
       mc.innerHTML = '<div class="handoff-view"><div style="color:#666;padding:40px;text-align:center;">Cargando...</div></div>'
@@ -1227,6 +1426,8 @@
         renderHandoffQueue()
       } else if (currentMainView === "billing") {
         renderBilling()
+      } else if (currentMainView === "team") {
+        renderTeam()
       } else {
         // inbox
         if (selectedLead) {

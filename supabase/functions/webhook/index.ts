@@ -99,6 +99,43 @@ Deno.serve(async (req) => {
           // 1. Obtener o crear lead con tenant_id
           const lead = await obtenerOCrearLead(senderId, tenant.id)
 
+          // Auto-asignar lead nuevo a un agente (round-robin) si el tenant
+          // tiene multiples agents y el lead no esta asignado todavia.
+          if (!lead.assigned_to) {
+            try {
+              const { createClient: cc3 } = await import("https://esm.sh/@supabase/supabase-js@2")
+              const sb3 = cc3(
+                Deno.env.get("SUPABASE_URL")!,
+                Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+              )
+              const { data: agents } = await sb3.from("user_profiles")
+                .select("id")
+                .eq("tenant_id", tenant.id)
+                .eq("active", true)
+                .in("role", ["tenant_admin", "agent"])
+              if (agents && agents.length > 0) {
+                // Elegir el agente con menos leads asignados (balanceado)
+                let min = Infinity
+                let chosen: string | null = null
+                for (const a of agents) {
+                  const { count } = await sb3.from("leads")
+                    .select("*", { count: "exact", head: true })
+                    .eq("tenant_id", tenant.id)
+                    .eq("assigned_to", a.id)
+                  const c = count || 0
+                  if (c < min) { min = c; chosen = a.id }
+                }
+                if (chosen) {
+                  await sb3.from("leads").update({ assigned_to: chosen })
+                    .eq("sender_id", senderId).eq("tenant_id", tenant.id)
+                  lead.assigned_to = chosen
+                }
+              }
+            } catch (err) {
+              console.error("[webhook] auto-assign failed:", err)
+            }
+          }
+
           // Si el operador humano tomó control, no responder con IA
           if (lead.ai_active === false) {
             console.log(`[webhook:POST][${tenant.slug}] AI pausado para este lead`)
