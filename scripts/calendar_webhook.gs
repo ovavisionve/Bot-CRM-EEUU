@@ -1,23 +1,17 @@
-// Google Apps Script — Webhook para sincronizar tours con Google Calendar
+// Google Apps Script - Webhook para sincronizar tours con Google Calendar
+// VERSION 2 - Usa PropertiesService (sin Sheet externo)
 //
-// CÓMO USAR:
-// 1. https://script.google.com → Nuevo proyecto
-// 2. Pegá este código completo, guardá
-// 3. Implementar → Nueva implementación → Aplicación web
+// COMO USAR:
+// 1. https://script.google.com -> Nuevo proyecto
+// 2. Pega este codigo, guarda
+// 3. Ejecuta testCalendar() una vez para autorizar permisos de Calendar
+// 4. Implementar -> Nueva implementacion -> Aplicacion web
 //    - Ejecutar como: Yo
-//    - Quién tiene acceso: Cualquiera
-// 4. Copiá la URL /exec
-// 5. En Supabase: supabase secrets set CALENDAR_WEBHOOK_URL=tu_url_aca
-// 6. Ejecutá testCalendar() una vez para autorizar permisos de Calendar
-//
-// El backend manda POSTs cuando se crea/actualiza un tour:
-// { token, action: "upsert", tour_id, calendar_email, title, description,
-//   start, duration_minutes, status }
-//
-// Para que se borre cuando status="cancelled", el backend manda action="delete".
+//    - Quien tiene acceso: CUALQUIER USUARIO (importante)
+// 5. Copia la URL /exec
+// 6. supabase secrets set CALENDAR_WEBHOOK_URL=tu_url
 
 var TOKEN = "ova_calendar_secret_2026";
-var SHEET_ID = "1Z-4GBiEBqR7qRyahILkpMDuv48BDS5JLgTGi161lLXA"; // mismo Sheet de Luis (o uno aparte)
 
 function doPost(e) {
   try {
@@ -26,12 +20,13 @@ function doPost(e) {
       return jsonResp({ ok: false, error: "Unauthorized" });
     }
 
-    var calId = data.calendar_email || Session.getActiveUser().getEmail();
-    var cal = CalendarApp.getCalendarById(calId);
-    if (!cal) cal = CalendarApp.getDefaultCalendar();
+    // Usar el calendario default del owner del script (no el del calendar_email)
+    // porque CalendarApp.getCalendarById() requiere acceso explicito.
+    var cal = CalendarApp.getDefaultCalendar();
 
-    var sheet = openMappingSheet();
-    var existingEventId = lookupEventId(sheet, data.tour_id);
+    var props = PropertiesService.getScriptProperties();
+    var key = "tour_" + data.tour_id;
+    var existingEventId = props.getProperty(key);
 
     if (data.action === "delete") {
       if (existingEventId) {
@@ -39,37 +34,44 @@ function doPost(e) {
           var ev = cal.getEventById(existingEventId);
           if (ev) ev.deleteEvent();
         } catch (err) { Logger.log("Delete failed: " + err); }
-        deleteMapping(sheet, data.tour_id);
+        props.deleteProperty(key);
       }
       return jsonResp({ ok: true, deleted: true });
     }
 
-    // upsert
     var start = new Date(data.start);
     var end = new Date(start.getTime() + (data.duration_minutes || 30) * 60 * 1000);
     var title = data.title || "Tour";
     if (data.status === "cancelled") title = "[CANCELADO] " + title;
     if (data.status === "completed") title = "[REALIZADO] " + title;
+    if (data.status === "no_show") title = "[NO ASISTIO] " + title;
 
     if (existingEventId) {
-      var ev = cal.getEventById(existingEventId);
-      if (ev) {
-        ev.setTitle(title);
-        ev.setTime(start, end);
-        ev.setDescription(data.description || "");
-        return jsonResp({ ok: true, updated: true, event_id: existingEventId });
+      try {
+        var ev = cal.getEventById(existingEventId);
+        if (ev) {
+          ev.setTitle(title);
+          ev.setTime(start, end);
+          ev.setDescription(data.description || "");
+          return jsonResp({ ok: true, updated: true, event_id: existingEventId });
+        }
+      } catch (err) {
+        Logger.log("Update failed, creating new: " + err);
       }
     }
 
-    // crear nuevo
     var newEv = cal.createEvent(title, start, end, { description: data.description || "" });
-    saveMapping(sheet, data.tour_id, newEv.getId());
+    props.setProperty(key, newEv.getId());
     return jsonResp({ ok: true, created: true, event_id: newEv.getId() });
 
   } catch (err) {
-    Logger.log("Error: " + err.toString());
+    Logger.log("ERROR: " + err.toString());
     return jsonResp({ ok: false, error: err.toString() });
   }
+}
+
+function doGet(e) {
+  return jsonResp({ ok: true, message: "OVA Calendar Webhook activo" });
 }
 
 function jsonResp(obj) {
@@ -77,40 +79,19 @@ function jsonResp(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-function openMappingSheet() {
-  var ss = SpreadsheetApp.openById(SHEET_ID);
-  var sheet = ss.getSheetByName("CalendarMapping");
-  if (!sheet) {
-    sheet = ss.insertSheet("CalendarMapping");
-    sheet.getRange(1, 1, 1, 2).setValues([["tour_id", "event_id"]]);
-  }
-  return sheet;
-}
-
-function lookupEventId(sheet, tourId) {
-  var data = sheet.getDataRange().getValues();
-  for (var i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === String(tourId)) return data[i][1];
-  }
-  return null;
-}
-
-function saveMapping(sheet, tourId, eventId) {
-  sheet.appendRow([tourId, eventId]);
-}
-
-function deleteMapping(sheet, tourId) {
-  var data = sheet.getDataRange().getValues();
-  for (var i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === String(tourId)) {
-      sheet.deleteRow(i + 1);
-      return;
-    }
-  }
-}
-
 // Para autorizar permisos la primera vez
 function testCalendar() {
   var cal = CalendarApp.getDefaultCalendar();
   Logger.log("Calendar OK: " + cal.getName());
+
+  // Crear evento de prueba (lo borra al final)
+  var testEv = cal.createEvent(
+    "Test OVA - se borra solo",
+    new Date(Date.now() + 60*60*1000),
+    new Date(Date.now() + 90*60*1000),
+    { description: "Evento de prueba creado por testCalendar()" }
+  );
+  Logger.log("Evento creado: " + testEv.getId());
+  testEv.deleteEvent();
+  Logger.log("Evento borrado. Todo OK.");
 }

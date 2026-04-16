@@ -277,6 +277,54 @@ Deno.serve(async (req) => {
     return !!data?.features?.[feature]
   }
 
+  // ─── GET ?action=handoff-queue — leads con ai_active=false (esperan respuesta humana) ───
+  if (action === "handoff-queue") {
+    let tid: string | null = null
+    const slug = url.searchParams.get("tenant")
+    if (isSuperAdmin(user) && slug) {
+      const { data } = await supabase.from("tenants").select("id").eq("slug", slug).maybeSingle()
+      tid = data?.id || null
+    } else { tid = user.tenant_id }
+    if (!tid) return json({ leads: [] })
+
+    const { data } = await supabase
+      .from("leads")
+      .select("*")
+      .eq("tenant_id", tid)
+      .eq("ai_active", false)
+      .order("updated_at", { ascending: false })
+
+    return json({ leads: data || [] })
+  }
+
+  // ─── GET ?action=agents — listar agentes (user_profiles) del tenant ───
+  if (action === "agents") {
+    let tid: string | null = null
+    const slug = url.searchParams.get("tenant")
+    if (isSuperAdmin(user) && slug) {
+      const { data } = await supabase.from("tenants").select("id").eq("slug", slug).maybeSingle()
+      tid = data?.id || null
+    } else { tid = user.tenant_id }
+    if (!tid) return json({ agents: [] })
+    const { data } = await supabase
+      .from("user_profiles")
+      .select("id, email, name, role")
+      .eq("tenant_id", tid)
+      .in("role", ["tenant_admin", "agent"])
+    return json({ agents: data || [] })
+  }
+
+  // ─── POST ?action=assign-lead — asignar lead a un agente ───
+  if (req.method === "POST" && action === "assign-lead") {
+    const { sender_id, agent_id } = await req.json()
+    const { data: lead } = await supabase.from("leads").select("tenant_id").eq("sender_id", sender_id).maybeSingle()
+    if (!lead) return json({ error: "Lead not found" }, 404)
+    if (!canAccessTenant(user, lead.tenant_id)) return json({ error: "Forbidden" }, 403)
+    const { error } = await supabase.from("leads").update({ assigned_to: agent_id || null, updated_at: new Date().toISOString() }).eq("sender_id", sender_id)
+    if (error) return json({ error: error.message }, 500)
+    return json({ ok: true })
+  }
+
   // ─── GET ?action=campaigns — listar campaigns del tenant ───
   if (action === "campaigns") {
     let tid: string | null = null
