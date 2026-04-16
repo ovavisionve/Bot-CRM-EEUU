@@ -25,6 +25,11 @@ Deno.serve(async () => {
   let totalEnviados = 0
 
   for (const tenant of tenants) {
+    // Feature gating: saltear tenants que no tengan follow-ups activos
+    if (!tenant.features?.auto_followups) {
+      console.log(`[followup-cron][${tenant.slug}] auto_followups feature OFF, skipping`)
+      continue
+    }
     const { procesados, enviados } = await procesarTenant(tenant)
     totalProcesados += procesados
     totalEnviados += enviados

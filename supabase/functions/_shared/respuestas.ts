@@ -92,9 +92,16 @@ export async function generarRespuesta(
     return ["Hello, one moment please"]
   }
 
-  // Cargar propiedades del Google Sheet del tenant
-  const propiedades = await obtenerPropiedades(tenant?.google_sheet_id)
-  const propiedadesTexto = formatearPropiedadesParaPrompt(propiedades)
+  // Fuente de propiedades: Google Sheet o tabla properties según feature flag
+  let propiedadesTexto = "No properties available yet."
+  if (tenant?.features?.google_sheets_properties && tenant?.google_sheet_id) {
+    const propiedades = await obtenerPropiedades(tenant.google_sheet_id)
+    propiedadesTexto = formatearPropiedadesParaPrompt(propiedades)
+  } else if (tenant?.id) {
+    // TODO: cargar desde tabla properties cuando implementemos esa fuente
+    console.log(`[respuestas] google_sheets_properties OFF para ${tenant.slug || tenant.id}`)
+  }
+
   const systemPrompt = buildSystemPrompt(propiedadesTexto, leadEstado, tenant, agentConfig)
 
   // Convertir historial a formato OpenAI (compatible con OpenRouter)

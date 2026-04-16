@@ -69,6 +69,12 @@ Deno.serve(async (req) => {
           continue
         }
 
+        // Feature gating: el bot de Instagram tiene que estar habilitado
+        if (!tenant.features?.instagram_bot) {
+          console.log(`[webhook:POST][${tenant.slug}] instagram_bot feature OFF`)
+          continue
+        }
+
         const agentConfig = await getAgentConfig(tenant.id)
 
         // Combinar ambos formatos de eventos (messaging y changes)
@@ -105,21 +111,29 @@ Deno.serve(async (req) => {
           // 3. Historial
           const historial = await obtenerHistorial(senderId, tenant.id)
 
-          // 4. Extraer estado estructurado
-          const nuevoEstado = await extraerEstadoLead(historial, mensaje, lead, tenant)
-          if (Object.keys(nuevoEstado).length > 0) {
-            await actualizarLead(senderId, tenant.id, nuevoEstado)
+          // 4. Extraer estado estructurado (sólo si el feature está activo)
+          let nuevoEstado: Record<string, any> = {}
+          if (tenant.features?.ai_memory_extraction) {
+            nuevoEstado = await extraerEstadoLead(historial, mensaje, lead, tenant)
+            if (Object.keys(nuevoEstado).length > 0) {
+              await actualizarLead(senderId, tenant.id, nuevoEstado)
+            }
           }
 
-          // 5. Generar respuesta con estado actualizado + tenant config
+          // 5. Generar respuesta IA (sólo si el feature está activo)
           const leadActualizado = { ...lead, ...nuevoEstado }
-          const respuestas = await generarRespuesta(
-            mensaje,
-            historial,
-            leadActualizado,
-            tenant,
-            agentConfig
-          )
+          let respuestas: string[] = []
+          if (tenant.features?.ai_responses) {
+            respuestas = await generarRespuesta(
+              mensaje,
+              historial,
+              leadActualizado,
+              tenant,
+              agentConfig
+            )
+          } else {
+            console.log(`[webhook:POST][${tenant.slug}] ai_responses feature OFF - no respondo`)
+          }
 
           // 6. Enviar por Instagram usando el token del tenant
           await enviarMensajesMultiples(
@@ -139,34 +153,36 @@ Deno.serve(async (req) => {
             last_contacted_at: new Date().toISOString(),
           })
 
-          // 9. Notificar al admin si cambio de estado importante
-          const leadName = leadActualizado.name || undefined
-          if (nuevoEstado.status === "tour_confirmed" || nuevoEstado.tour_confirmed === true) {
-            await notificarAdmin({
-              senderId,
-              leadName,
-              mensaje: `Tour agendado ${leadActualizado.tour_date || ""} en ${leadActualizado.selected_property_name || ""}`,
-              tipo: "tour_agendado",
-              tenant,
-            })
-          } else if (nuevoEstado.status === "qualified") {
-            await notificarAdmin({
-              senderId,
-              leadName,
-              mensaje: `Lead calificado`,
-              tipo: "calificado",
-              tenant,
-            })
-          } else if (nuevoEstado.status === "disqualified") {
-            await notificarAdmin({
-              senderId,
-              leadName,
-              mensaje: `Lead descalificado`,
-              tipo: "disqualified",
-              tenant,
-            })
-          } else {
-            await notificarAdmin({ senderId, mensaje, tenant })
+          // 9. Notificar al admin si el feature está activo
+          if (tenant.features?.admin_email_notifications) {
+            const leadName = leadActualizado.name || undefined
+            if (nuevoEstado.status === "tour_confirmed" || nuevoEstado.tour_confirmed === true) {
+              await notificarAdmin({
+                senderId,
+                leadName,
+                mensaje: `Tour agendado ${leadActualizado.tour_date || ""} en ${leadActualizado.selected_property_name || ""}`,
+                tipo: "tour_agendado",
+                tenant,
+              })
+            } else if (nuevoEstado.status === "qualified") {
+              await notificarAdmin({
+                senderId,
+                leadName,
+                mensaje: `Lead calificado`,
+                tipo: "calificado",
+                tenant,
+              })
+            } else if (nuevoEstado.status === "disqualified") {
+              await notificarAdmin({
+                senderId,
+                leadName,
+                mensaje: `Lead descalificado`,
+                tipo: "disqualified",
+                tenant,
+              })
+            } else {
+              await notificarAdmin({ senderId, mensaje, tenant })
+            }
           }
         }
       }

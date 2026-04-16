@@ -3,12 +3,32 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
+export interface TenantFeatures {
+  instagram_bot: boolean
+  ai_responses: boolean
+  google_sheets_properties: boolean
+  ai_memory_extraction: boolean
+  auto_followups: boolean
+  admin_email_notifications: boolean
+  handoff_to_human: boolean
+  multi_language: boolean
+  dashboard_access: boolean
+  sms_bot: boolean
+  drip_campaigns: boolean
+  lead_scoring: boolean
+  analytics: boolean
+  white_label: boolean
+  tour_calendar: boolean
+  custom_bot_voice: boolean
+}
+
 export interface Tenant {
   id: string
   name: string
   slug: string
   plan: string
   status: string
+  features: TenantFeatures
   agent_name: string
   agent_phone: string | null
   agent_email: string
