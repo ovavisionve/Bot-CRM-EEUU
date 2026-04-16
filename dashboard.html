@@ -478,6 +478,30 @@
     .prop-badge.unavail { background: var(--danger-bg); color: var(--danger); }
     .prop-badge.inactive { background: var(--surface-alt); color: var(--text-muted); }
 
+    /* Campaigns */
+    .camp-view { padding: 20px 24px; overflow-y: auto; height: 100%; background: var(--bg); }
+    .camp-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .camp-header h2 { font-size: 22px; color: var(--text); }
+    .camp-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      padding: 16px; margin-bottom: 12px; box-shadow: var(--shadow-sm);
+    }
+    .camp-card .row { display: flex; justify-content: space-between; align-items: flex-start; }
+    .camp-card h3 { font-size: 16px; color: var(--text); margin-bottom: 4px; }
+    .camp-card .meta { font-size: 12px; color: var(--text-soft); }
+    .camp-card.inactive { opacity: 0.55; }
+    .trigger-badge {
+      font-size: 10px; padding: 3px 8px; border-radius: 10px;
+      font-weight: 600; text-transform: uppercase;
+      background: var(--brand-soft); color: var(--brand);
+    }
+    .step-item {
+      background: var(--surface-alt); padding: 10px 12px; border-radius: 6px;
+      margin-top: 8px; border-left: 3px solid var(--brand);
+      font-size: 13px;
+    }
+    .step-item .step-head { display: flex; justify-content: space-between; color: var(--text-soft); font-size: 11px; margin-bottom: 4px; }
+
     /* Tour Calendar */
     .tours-view { padding: 20px 24px; overflow-y: auto; height: 100%; background: var(--bg); }
     .tours-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
@@ -576,6 +600,7 @@
         <button class="nav-btn" data-main-view="analytics" data-feature="analytics" onclick="setMainView('analytics')">📈 Analytics</button>
         <button class="nav-btn" data-main-view="properties" data-feature="properties_editor" onclick="setMainView('properties')">🏠 Propiedades</button>
         <button class="nav-btn" data-main-view="tours" data-feature="tour_calendar" onclick="setMainView('tours')">📅 Tours</button>
+        <button class="nav-btn" data-main-view="campaigns" data-feature="drip_campaigns" onclick="setMainView('campaigns')">🎯 Campañas</button>
       </div>
       <div id="main-content" style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
         <div class="empty-state">
@@ -586,6 +611,30 @@
     </div>
   </div>
   <div class="toast" id="toast"></div>
+
+  <!-- Modal editar campaña -->
+  <div class="modal-overlay" id="edit-camp-modal">
+    <div class="modal" id="edit-camp-modal-inner">
+      <h2 id="camp-modal-title">Nueva campaña</h2>
+      <label style="display:block;font-size:12px;color:var(--text-soft);margin:10px 0 4px;">Nombre</label>
+      <input id="c-name" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:6px;background:var(--surface-alt);" />
+      <label style="display:block;font-size:12px;color:var(--text-soft);margin:10px 0 4px;">Trigger</label>
+      <select id="c-trigger" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:6px;background:var(--surface-alt);">
+        <option value="new_lead">new_lead - lead nuevo</option>
+        <option value="no_response_24h">no_response_24h - sin respuesta 24h</option>
+        <option value="tour_reminder">tour_reminder - recordatorio de tour</option>
+        <option value="post_tour">post_tour - post tour 24h</option>
+        <option value="budget_objection">budget_objection - objeción de presupuesto</option>
+      </select>
+      <div style="margin-top:16px;font-size:12px;color:var(--text-soft);font-weight:600;">Pasos (usa {name}, {tour_date}, {property} como placeholders)</div>
+      <div id="c-steps"></div>
+      <button type="button" onclick="addCampStep()" style="background:var(--brand-soft);color:var(--brand);border:1px solid var(--brand);padding:6px 12px;border-radius:6px;cursor:pointer;margin-top:4px;font-weight:500;">+ Agregar paso</button>
+      <div style="display:flex;gap:8px;margin-top:20px;justify-content:flex-end;">
+        <button class="btn btn-secondary" onclick="closeCampModal()">Cancelar</button>
+        <button class="btn" onclick="saveCampaignModal()">Guardar</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Modal editar propiedad -->
   <div class="modal-overlay" id="edit-prop-modal">
@@ -815,6 +864,8 @@
         renderProperties()
       } else if (currentMainView === "tours") {
         renderTours()
+      } else if (currentMainView === "campaigns") {
+        renderCampaigns()
       } else {
         // inbox
         if (selectedLead) {
@@ -883,6 +934,162 @@
       }
       html += '</div>'
       mc.innerHTML = html
+    }
+
+    let campaignsCache = []
+
+    async function renderCampaigns() {
+      const mc = document.getElementById("main-content")
+      mc.innerHTML = '<div class="camp-view"><div style="color:#666;padding:40px;text-align:center;">Cargando...</div></div>'
+
+      const slug = currentTenant?.slug || ""
+      const r = await api("?action=campaigns&tenant=" + slug)
+      campaignsCache = r.campaigns || []
+
+      let html = '<div class="camp-view">' +
+        '<div class="camp-header"><h2>🎯 Campañas automáticas</h2>' +
+          '<button class="btn" onclick="openNewCampaign()">+ Nueva campaña</button></div>'
+
+      if (campaignsCache.length === 0) {
+        html += '<div style="padding:60px;text-align:center;color:#666;">' +
+          'Sin campañas creadas.<br>Las campañas envían mensajes automáticos según triggers (nuevo lead, tour próximo, etc).' +
+          '</div>'
+      } else {
+        for (const c of campaignsCache) {
+          const steps = c.steps || []
+          let stepsHTML = ""
+          for (const s of steps) {
+            const delay = s.delay_hours === 0 ? "inmediato" :
+              s.delay_hours > 0 ? `+${s.delay_hours}h` : `${s.delay_hours}h antes`
+            stepsHTML += '<div class="step-item">' +
+              '<div class="step-head"><span>Paso ' + s.step + ' · ' + (s.channel || "instagram") + ' · ' + delay + '</span></div>' +
+              '<div>' + esc(s.message) + '</div></div>'
+          }
+          html += '<div class="camp-card' + (c.active ? '' : ' inactive') + '">' +
+            '<div class="row"><div>' +
+              '<h3>' + esc(c.name) + '</h3>' +
+              '<div class="meta">' +
+                '<span class="trigger-badge">' + c.trigger + '</span> · ' +
+                steps.length + ' pasos · ' +
+                (c.active ? 'ACTIVA' : 'PAUSADA') +
+              '</div>' +
+            '</div>' +
+            '<div style="display:flex;gap:6px;">' +
+              '<button class="btn-secondary" style="padding:5px 10px;font-size:12px;border-radius:6px;border:1px solid #e4e6eb;cursor:pointer;background:#f5f6f7;" onclick="toggleCampaign(\'' + c.id + '\', ' + !c.active + ')">' + (c.active ? 'Pausar' : 'Activar') + '</button>' +
+              '<button class="btn-secondary" style="padding:5px 10px;font-size:12px;border-radius:6px;border:1px solid #e4e6eb;cursor:pointer;background:#f5f6f7;" onclick="editCampaign(\'' + c.id + '\')">Editar</button>' +
+              '<button class="btn-secondary" style="padding:5px 10px;font-size:12px;border-radius:6px;border:1px solid #fa383e;color:#fa383e;cursor:pointer;background:#fff;" onclick="deleteCampaign(\'' + c.id + '\')">Eliminar</button>' +
+            '</div></div>' +
+            stepsHTML +
+          '</div>'
+        }
+      }
+      html += '</div>'
+      mc.innerHTML = html
+    }
+
+    window.toggleCampaign = async function(id, newActive) {
+      const r = await api("?action=update-campaign", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, updates: { active: newActive } }),
+      })
+      if (r.ok) { toast(newActive ? "Campaña activada" : "Pausada"); renderCampaigns() }
+      else toast(r.error || "Error", true)
+    }
+
+    window.deleteCampaign = async function(id) {
+      if (!confirm("¿Eliminar esta campaña?")) return
+      const r = await api("?action=delete-campaign", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      })
+      if (r.ok) { toast("Eliminada"); renderCampaigns() }
+      else toast(r.error || "Error", true)
+    }
+
+    window.openNewCampaign = function() {
+      editCampaignModal(null)
+    }
+
+    window.editCampaign = function(id) {
+      const c = campaignsCache.find(x => x.id === id)
+      if (c) editCampaignModal(c)
+    }
+
+    function editCampaignModal(existing) {
+      const c = existing || { id: null, name: "", trigger: "new_lead", steps: [], active: true }
+      document.getElementById("camp-modal-title").textContent = existing ? "Editar campaña" : "Nueva campaña"
+      document.getElementById("edit-camp-modal").dataset.campaignId = c.id || ""
+      document.getElementById("c-name").value = c.name || ""
+      document.getElementById("c-trigger").value = c.trigger || "new_lead"
+
+      // Renderizar pasos
+      const stepsContainer = document.getElementById("c-steps")
+      stepsContainer.innerHTML = ""
+      const steps = c.steps.length > 0 ? c.steps : [{step:1,delay_hours:0,channel:"instagram",message:""}]
+      for (const s of steps) addStepToContainer(s)
+
+      document.getElementById("edit-camp-modal").classList.add("show")
+    }
+
+    function addStepToContainer(s) {
+      const div = document.createElement("div")
+      div.style.cssText = "background:var(--surface-alt);padding:10px;border-radius:6px;margin-bottom:8px;border:1px solid var(--border);"
+      div.innerHTML =
+        '<div style="display:flex;gap:8px;margin-bottom:6px;">' +
+          '<input class="c-step-delay" value="' + (s.delay_hours || 0) + '" type="number" placeholder="Delay horas" style="width:120px;padding:6px 8px;border:1px solid var(--border);border-radius:4px;" />' +
+          '<select class="c-step-channel" style="width:140px;padding:6px 8px;border:1px solid var(--border);border-radius:4px;"><option value="instagram"' + (s.channel==="instagram"?" selected":"") + '>Instagram</option><option value="sms"' + (s.channel==="sms"?" selected":"") + '>SMS</option></select>' +
+          '<button type="button" onclick="removeCampStep(this)" style="background:#fff;border:1px solid #fa383e;color:#fa383e;padding:4px 10px;border-radius:4px;cursor:pointer;margin-left:auto;">Eliminar paso</button>' +
+        '</div>' +
+        '<textarea class="c-step-msg" rows="2" placeholder="Mensaje... Usa {name}, {tour_date}, {property}" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:4px;font-family:inherit;">' + (s.message || "") + '</textarea>'
+      document.getElementById("c-steps").appendChild(div)
+    }
+
+    window.closeCampModal = function() {
+      document.getElementById("edit-camp-modal").classList.remove("show")
+    }
+
+    window.addCampStep = function() {
+      addStepToContainer({ step: 0, delay_hours: 0, channel: "instagram", message: "" })
+    }
+
+    window.removeCampStep = function(btn) {
+      btn.closest("div").parentElement.remove()
+    }
+
+    window.saveCampaignModal = async function() {
+      const modal = document.getElementById("edit-camp-modal")
+      const id = modal.dataset.campaignId
+      const name = document.getElementById("c-name").value.trim()
+      const trigger = document.getElementById("c-trigger").value
+      if (!name) return toast("Nombre requerido", true)
+
+      const stepEls = document.getElementById("c-steps").children
+      const steps = []
+      for (let i = 0; i < stepEls.length; i++) {
+        const el = stepEls[i]
+        const delay = Number(el.querySelector(".c-step-delay").value) || 0
+        const channel = el.querySelector(".c-step-channel").value
+        const msg = el.querySelector(".c-step-msg").value.trim()
+        if (!msg) continue
+        steps.push({ step: i + 1, delay_hours: delay, channel, message: msg })
+      }
+      if (steps.length === 0) return toast("Al menos 1 paso con mensaje", true)
+
+      const action = id ? "update-campaign" : "create-campaign"
+      const body = id
+        ? { id, updates: { name, trigger, steps } }
+        : { name, trigger, steps, tenant_slug: currentTenant.slug }
+      const r = await api("?action=" + action, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+      if (r.ok) {
+        toast("Guardada")
+        closeCampModal()
+        renderCampaigns()
+      } else {
+        toast(r.error || "Error", true)
+      }
     }
 
     let toursCache = []

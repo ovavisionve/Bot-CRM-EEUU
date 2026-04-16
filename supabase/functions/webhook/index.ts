@@ -13,6 +13,7 @@ import {
 import { notificarAdmin } from "../_shared/notificar.ts"
 import { extraerEstadoLead } from "../_shared/extractor.ts"
 import { getTenantByInstagramId, getAgentConfig } from "../_shared/tenant.ts"
+import { calculateScore } from "../_shared/scoring.ts"
 
 Deno.serve(async (req) => {
   const url = new URL(req.url)
@@ -185,11 +186,18 @@ Deno.serve(async (req) => {
             await guardarMensaje(senderId, lead.id, tenant.id, resp, "outbound")
           }
 
-          // 8. Marcar último contacto del bot con el lead
-          await actualizarLead(senderId, tenant.id, {
+          // 8. Marcar último contacto del bot con el lead + calcular score si está activo
+          const extraUpdates: Record<string, unknown> = {
             last_ai_message_at: new Date().toISOString(),
             last_contacted_at: new Date().toISOString(),
-          })
+          }
+          if (tenant.features?.lead_scoring) {
+            const msgCount = historial.length + 1
+            const { score, factors } = calculateScore(leadActualizado, msgCount)
+            extraUpdates.score = score
+            extraUpdates.score_factors = factors
+          }
+          await actualizarLead(senderId, tenant.id, extraUpdates)
 
           // 9. Si tour_calendar está ON y se confirmó tour -> crear registro en tours
           const acabaDeConfirmarTour = (

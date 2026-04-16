@@ -277,6 +277,76 @@ Deno.serve(async (req) => {
     return !!data?.features?.[feature]
   }
 
+  // ─── GET ?action=campaigns — listar campaigns del tenant ───
+  if (action === "campaigns") {
+    let tid: string | null = null
+    const slug = url.searchParams.get("tenant")
+    if (isSuperAdmin(user) && slug) {
+      const { data } = await supabase.from("tenants").select("id").eq("slug", slug).maybeSingle()
+      tid = data?.id || null
+    } else { tid = user.tenant_id }
+    if (!tid) return json({ campaigns: [] })
+    const { data } = await supabase
+      .from("campaigns")
+      .select("*")
+      .eq("tenant_id", tid)
+      .order("created_at", { ascending: false })
+    return json({ campaigns: data || [] })
+  }
+
+  // ─── POST ?action=create-campaign ───
+  if (req.method === "POST" && action === "create-campaign") {
+    const body = await req.json()
+    const tid = isSuperAdmin(user) && body.tenant_slug
+      ? (await supabase.from("tenants").select("id").eq("slug", body.tenant_slug).maybeSingle()).data?.id
+      : user.tenant_id
+    if (!tid) return json({ error: "No tenant" }, 404)
+    if (!canAccessTenant(user, tid)) return json({ error: "Forbidden" }, 403)
+    if (!(await checkFeature(tid, "drip_campaigns"))) return json({ error: "Feature drip_campaigns no activa" }, 403)
+
+    const { data, error } = await supabase
+      .from("campaigns")
+      .insert({
+        tenant_id: tid,
+        name: body.name,
+        trigger: body.trigger,
+        steps: body.steps || [],
+        active: body.active !== false,
+      })
+      .select()
+      .single()
+    if (error) return json({ error: error.message }, 500)
+    return json({ ok: true, campaign: data })
+  }
+
+  // ─── POST ?action=update-campaign ───
+  if (req.method === "POST" && action === "update-campaign") {
+    const { id, updates } = await req.json()
+    const { data: c } = await supabase.from("campaigns").select("tenant_id").eq("id", id).maybeSingle()
+    if (!c) return json({ error: "Not found" }, 404)
+    if (!canAccessTenant(user, c.tenant_id)) return json({ error: "Forbidden" }, 403)
+    if (!(await checkFeature(c.tenant_id, "drip_campaigns"))) return json({ error: "Feature drip_campaigns no activa" }, 403)
+
+    const allowed: Record<string, unknown> = {}
+    for (const k of ["name", "trigger", "steps", "active"]) {
+      if (k in updates) allowed[k] = updates[k]
+    }
+    const { error } = await supabase.from("campaigns").update(allowed).eq("id", id)
+    if (error) return json({ error: error.message }, 500)
+    return json({ ok: true })
+  }
+
+  // ─── POST ?action=delete-campaign ───
+  if (req.method === "POST" && action === "delete-campaign") {
+    const { id } = await req.json()
+    const { data: c } = await supabase.from("campaigns").select("tenant_id").eq("id", id).maybeSingle()
+    if (!c) return json({ error: "Not found" }, 404)
+    if (!canAccessTenant(user, c.tenant_id)) return json({ error: "Forbidden" }, 403)
+    const { error } = await supabase.from("campaigns").delete().eq("id", id)
+    if (error) return json({ error: error.message }, 500)
+    return json({ ok: true })
+  }
+
   // ─── GET ?action=tours — listar tours del tenant ───
   if (action === "tours") {
     let tid: string | null = null
