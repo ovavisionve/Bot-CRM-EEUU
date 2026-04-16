@@ -1,10 +1,10 @@
 // supabase/functions/webhook/index.ts
-// Webhook de Instagram — OVA VISION
-// Recibe verificación GET de Meta y eventos POST de mensajes.
+// Webhook de Instagram — OVA VISION / Luis Almario RE
+// Recibe verificación GET de Meta y procesa DMs con IA.
 
-import { detectarRespuesta } from "../_shared/respuestas.ts"
-import { enviarMensaje } from "../_shared/instagram.ts"
-import { guardarLead } from "../_shared/db.ts"
+import { generarRespuesta } from "../_shared/respuestas.ts"
+import { enviarMensajesMultiples } from "../_shared/instagram.ts"
+import { obtenerOCrearLead, guardarMensaje, obtenerHistorial } from "../_shared/db.ts"
 import { notificarAdmin } from "../_shared/notificar.ts"
 
 Deno.serve(async (req) => {
@@ -42,29 +42,51 @@ Deno.serve(async (req) => {
 
       console.log("[webhook:POST] Evento recibido:", JSON.stringify(body, null, 2))
 
-      // Verificar que es un evento de Instagram
       if (body.object !== "instagram") {
         console.warn("[webhook:POST] Evento ignorado — object:", body.object)
         return new Response("Not Instagram", { status: 400 })
       }
 
       for (const entry of body.entry || []) {
-        console.log("[webhook:POST] Entry ID:", entry.id, "— Time:", entry.time)
-
         for (const event of entry.messaging || []) {
           const senderId = event.sender?.id
           const mensaje = event.message?.text || ""
 
-          console.log("[webhook:POST] Mensaje de", senderId, ":", mensaje)
-
-          if (!mensaje) {
-            console.log("[webhook:POST] Evento sin texto (sticker, imagen, etc.) — ignorado")
+          if (!senderId || !mensaje) {
+            console.log("[webhook:POST] Evento sin texto — ignorado")
             continue
           }
 
-          // TODO (paso 4-5): detectar respuesta y enviar DM
-          // TODO (paso 6): guardar lead en DB
-          // TODO (paso 7): notificar al admin
+          // Ignorar mensajes que nosotros mismos enviamos (echo)
+          if (event.message?.is_echo) {
+            console.log("[webhook:POST] Echo ignorado")
+            continue
+          }
+
+          console.log("[webhook:POST] DM de", senderId, ":", mensaje)
+
+          // 1. Obtener o crear lead en la DB
+          const lead = await obtenerOCrearLead(senderId)
+
+          // 2. Guardar el mensaje entrante
+          await guardarMensaje(senderId, lead.id, mensaje, "inbound")
+
+          // 3. Obtener historial de conversación
+          const historial = await obtenerHistorial(senderId)
+
+          // 4. Generar respuesta con Claude
+          const respuestas = await generarRespuesta(mensaje, historial)
+
+          // 5. Enviar mensajes por Instagram (múltiples, cortos)
+          await enviarMensajesMultiples(senderId, respuestas)
+
+          // 6. Guardar cada respuesta en la DB
+          for (const resp of respuestas) {
+            await guardarMensaje(senderId, lead.id, resp, "outbound")
+          }
+
+          // 7. Notificar al admin
+          await notificarAdmin({ senderId, mensaje })
         }
       }
     } catch (err) {
