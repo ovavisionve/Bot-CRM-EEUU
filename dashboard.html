@@ -140,6 +140,68 @@
     .ai-badge:hover { filter: brightness(0.95); }
     .ai-badge.paused { background: var(--warn-bg); color: #b57800; }
 
+    /* Realtime indicator */
+    .live-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--success); display: inline-block;
+      margin-right: 6px; animation: pulse 1.6s ease-in-out infinite;
+    }
+    .live-dot.off { background: var(--text-muted); animation: none; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.2); }
+    }
+    .live-status {
+      font-size: 11px; color: var(--text-soft); display: inline-flex;
+      align-items: center; padding: 2px 8px; background: var(--surface-alt);
+      border-radius: 10px;
+    }
+
+    /* Typing indicator */
+    .typing-bubble {
+      align-self: flex-start; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 18px;
+      border-bottom-left-radius: 4px;
+      padding: 12px 16px; display: inline-flex; gap: 4px;
+      margin-bottom: 4px;
+    }
+    .typing-bubble span {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--text-muted);
+      animation: typing 1.4s ease-in-out infinite;
+    }
+    .typing-bubble span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-bubble span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes typing {
+      0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+      30% { opacity: 1; transform: translateY(-3px); }
+    }
+
+    /* Handoff queue */
+    .handoff-view { padding: 20px 24px; overflow-y: auto; height: 100%; background: var(--bg); }
+    .handoff-card {
+      background: var(--surface); border: 1px solid var(--warn);
+      border-left: 4px solid var(--warn); border-radius: 10px;
+      padding: 16px; margin-bottom: 10px; cursor: pointer;
+      box-shadow: var(--shadow-sm); display: flex;
+      justify-content: space-between; align-items: center;
+    }
+    .handoff-card:hover { box-shadow: var(--shadow); }
+    .handoff-card .who { font-weight: 600; color: var(--text); }
+    .handoff-card .meta { font-size: 12px; color: var(--text-soft); margin-top: 2px; }
+
+    /* Notification toast nuevo mensaje */
+    .new-msg-toast {
+      position: fixed; top: 70px; right: 20px;
+      background: var(--brand); color: white;
+      padding: 12px 20px; border-radius: 8px;
+      font-weight: 600; opacity: 0; transform: translateX(20px);
+      transition: all 0.3s; z-index: 1000;
+      box-shadow: var(--shadow); cursor: pointer;
+      font-size: 13px;
+    }
+    .new-msg-toast.show { opacity: 1; transform: translateX(0); }
+
     .lead-detail-bar {
       padding: 12px 24px; background: var(--surface);
       border-bottom: 1px solid var(--border);
@@ -578,6 +640,7 @@
         <div class="who">
           <strong id="user-name">Cargando...</strong>
           <span id="tenant-name">-</span>
+          <span class="live-status" id="live-status" style="margin-left:6px;"><span class="live-dot off"></span>conectando</span>
         </div>
         <button onclick="logout()">Salir</button>
       </div>
@@ -601,6 +664,7 @@
         <button class="nav-btn" data-main-view="properties" data-feature="properties_editor" onclick="setMainView('properties')">🏠 Propiedades</button>
         <button class="nav-btn" data-main-view="tours" data-feature="tour_calendar" onclick="setMainView('tours')">📅 Tours</button>
         <button class="nav-btn" data-main-view="campaigns" data-feature="drip_campaigns" onclick="setMainView('campaigns')">🎯 Campañas</button>
+        <button class="nav-btn" data-main-view="handoff" data-feature="handoff_to_human" onclick="setMainView('handoff')">🚨 Handoff <span id="handoff-count" style="background:#fa383e;color:white;border-radius:10px;padding:1px 6px;font-size:10px;display:none;margin-left:4px;"></span></button>
       </div>
       <div id="main-content" style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
         <div class="empty-state">
@@ -611,6 +675,7 @@
     </div>
   </div>
   <div class="toast" id="toast"></div>
+  <div class="new-msg-toast" id="new-msg-toast" onclick="goToLatestLead()"></div>
 
   <!-- Modal outcome de tour -->
   <div class="modal-overlay" id="tour-outcome-modal">
@@ -853,6 +918,189 @@
 
     await loadLeads()
 
+    // ===== SUPABASE REALTIME =====
+    // Suscribirse a INSERTs en conversations + UPDATEs en leads del tenant actual
+    let realtimeChannel = null
+    function startRealtime() {
+      if (realtimeChannel) supabase.removeChannel(realtimeChannel)
+      if (!currentTenant?.id) return
+
+      realtimeChannel = supabase
+        .channel("dashboard-rt-" + currentTenant.id)
+        .on("postgres_changes", {
+          event: "INSERT", schema: "public", table: "conversations",
+          filter: "tenant_id=eq." + currentTenant.id,
+        }, (payload) => onNewMessage(payload.new))
+        .on("postgres_changes", {
+          event: "UPDATE", schema: "public", table: "leads",
+          filter: "tenant_id=eq." + currentTenant.id,
+        }, (payload) => onLeadUpdate(payload.new))
+        .on("postgres_changes", {
+          event: "INSERT", schema: "public", table: "leads",
+          filter: "tenant_id=eq." + currentTenant.id,
+        }, (payload) => onLeadInsert(payload.new))
+        .subscribe((status) => {
+          const ind = document.getElementById("live-status")
+          if (!ind) return
+          if (status === "SUBSCRIBED") {
+            ind.innerHTML = '<span class="live-dot"></span>en vivo'
+          } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
+            ind.innerHTML = '<span class="live-dot off"></span>desconectado'
+          }
+        })
+    }
+    startRealtime()
+
+    function onNewMessage(msg) {
+      // Actualizar lead en memoria si está en la lista
+      const lead = leads.find(l => l.sender_id === msg.sender_id)
+      if (lead) lead.updated_at = msg.created_at
+
+      // Si el lead seleccionado coincide, agregar mensaje al chat sin refrescar todo
+      if (selectedLead === msg.sender_id && currentMainView === "inbox") {
+        appendMessageToChat(msg)
+        // Si es inbound, ocultar typing indicator
+        if (msg.direction === "inbound") removeTypingIndicator()
+        // Si es outbound del bot, también ocultar typing
+        if (msg.direction === "outbound") removeTypingIndicator()
+      } else if (msg.direction === "inbound") {
+        // Mensaje nuevo de otro lead → toast notif + reload lista
+        showNewMsgToast(msg)
+      }
+
+      renderLeadsList()
+    }
+
+    function onLeadUpdate(updated) {
+      const idx = leads.findIndex(l => l.sender_id === updated.sender_id)
+      if (idx >= 0) leads[idx] = { ...leads[idx], ...updated }
+      else leads.unshift(updated)
+      renderLeadsList()
+      if (currentMainView === "handoff") renderHandoffQueue()
+      // Actualizar contador handoff
+      updateHandoffBadge()
+    }
+
+    function onLeadInsert(newLead) {
+      leads.unshift(newLead)
+      renderLeadsList()
+      showNewMsgToast({ sender_id: newLead.sender_id, message_text: "Nuevo lead!" }, true)
+    }
+
+    function appendMessageToChat(msg) {
+      const chat = document.getElementById("chat")
+      if (!chat) return
+      const dir = msg.direction === "inbound" ? "inbound" : "outbound"
+      const isAgent = msg.direction === "outbound" && msg.sent_by === "agent"
+      const dirClass = dir + (isAgent ? " agent" : "")
+      const time = new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+      const div = document.createElement("div")
+      div.className = "message " + dirClass
+      div.innerHTML = '<div style="max-width:100%;"><div class="bubble">' +
+        esc(msg.message_text) + '<span class="msg-time">' + time + '</span></div></div>'
+      chat.appendChild(div)
+      chat.scrollTop = chat.scrollHeight
+
+      // Si es inbound, mostrar typing del bot
+      if (msg.direction === "inbound") {
+        const lead = leads.find(l => l.sender_id === msg.sender_id)
+        if (lead?.ai_active !== false) showTypingIndicator()
+      }
+    }
+
+    function showTypingIndicator() {
+      const chat = document.getElementById("chat")
+      if (!chat || chat.querySelector(".typing-bubble")) return
+      const div = document.createElement("div")
+      div.className = "typing-bubble"
+      div.innerHTML = "<span></span><span></span><span></span>"
+      chat.appendChild(div)
+      chat.scrollTop = chat.scrollHeight
+    }
+    function removeTypingIndicator() {
+      const t = document.querySelector(".typing-bubble")
+      if (t) t.remove()
+    }
+
+    let lastNewMsgSender = null
+    function showNewMsgToast(msg, isNewLead) {
+      const t = document.getElementById("new-msg-toast")
+      const lead = leads.find(l => l.sender_id === msg.sender_id)
+      const name = lead?.name || msg.sender_id || "Lead"
+      lastNewMsgSender = msg.sender_id
+      t.textContent = (isNewLead ? "🆕 Lead nuevo: " : "💬 Nuevo mensaje de ") + name
+      t.classList.add("show")
+      setTimeout(() => t.classList.remove("show"), 5000)
+    }
+
+    window.goToLatestLead = function() {
+      if (lastNewMsgSender) {
+        currentMainView = "inbox"
+        document.querySelectorAll(".nav-btn").forEach(b =>
+          b.classList.toggle("active", b.dataset.mainView === "inbox"))
+        selectLead(lastNewMsgSender)
+      }
+      document.getElementById("new-msg-toast").classList.remove("show")
+    }
+
+    function updateHandoffBadge() {
+      const n = leads.filter(l => l.ai_active === false).length
+      const badge = document.getElementById("handoff-count")
+      if (badge) {
+        if (n > 0) { badge.textContent = n; badge.style.display = "inline-block" }
+        else badge.style.display = "none"
+      }
+    }
+    updateHandoffBadge()
+
+    async function renderHandoffQueue() {
+      const mc = document.getElementById("main-content")
+      mc.innerHTML = '<div class="handoff-view"><div style="color:#666;padding:40px;text-align:center;">Cargando...</div></div>'
+
+      const slug = currentTenant?.slug || ""
+      const r = await api("?action=handoff-queue&tenant=" + slug)
+      const queueLeads = r.leads || []
+
+      let html = '<div class="handoff-view"><h2 style="font-size:22px;margin-bottom:14px;color:var(--text);">🚨 Leads esperando respuesta humana (' + queueLeads.length + ')</h2>'
+
+      if (queueLeads.length === 0) {
+        html += '<div style="background:var(--surface);padding:60px;text-align:center;color:var(--text-soft);border:1px solid var(--border);border-radius:10px;">' +
+          '✓ No hay leads pendientes en este momento.<br>' +
+          '<small style="color:var(--text-muted);">Aparecerán acá cuando un lead pida hablar con humano o cuando pauses el bot manualmente.</small></div>'
+      } else {
+        for (const l of queueLeads) {
+          const name = l.name || "Lead " + l.sender_id
+          const status = l.status || "new"
+          html += '<div class="handoff-card" onclick="openHandoffLead(\'' + l.sender_id + '\')">' +
+            '<div><div class="who">' + esc(name) + '</div>' +
+            '<div class="meta">' +
+              '<span class="status-badge status-' + status + '">' + status + '</span> · ' +
+              'Última actividad: ' + getTimeAgo(l.updated_at || l.created_at) + ' · ' +
+              'IG: ' + esc(l.sender_id) +
+            '</div></div>' +
+            '<button class="btn" onclick="event.stopPropagation();reactivateBot(\'' + l.sender_id + '\')">Reactivar bot</button>' +
+          '</div>'
+        }
+      }
+      html += '</div>'
+      mc.innerHTML = html
+    }
+
+    window.openHandoffLead = function(senderId) {
+      currentMainView = "inbox"
+      document.querySelectorAll(".nav-btn").forEach(b =>
+        b.classList.toggle("active", b.dataset.mainView === "inbox"))
+      selectLead(senderId)
+    }
+    window.reactivateBot = async function(senderId) {
+      const r = await api("?action=toggle-ai", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sender_id: senderId, ai_active: true }),
+      })
+      if (r.ok) { toast("Bot reactivado para este lead"); renderHandoffQueue() }
+      else toast(r.error || "Error", true)
+    }
+
     function applyFeatureGating() {
       const features = currentTenant?.features || {}
       document.querySelectorAll(".nav-btn[data-feature]").forEach(btn => {
@@ -898,6 +1146,8 @@
         renderTours()
       } else if (currentMainView === "campaigns") {
         renderCampaigns()
+      } else if (currentMainView === "handoff") {
+        renderHandoffQueue()
       } else {
         // inbox
         if (selectedLead) {
