@@ -41,7 +41,10 @@ Deno.serve(async (req) => {
 
   return new Response(html, {
     status: 200,
-    headers: { "Content-Type": "text/html; charset=utf-8" },
+    headers: new Headers({
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-cache",
+    }),
   })
 })
 
@@ -98,7 +101,7 @@ function renderHTML(leads: any[], conversacion: any[], leadActivo: any, selected
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OVA REAL — Dashboard</title>
+  <title>OVA REAL - Dashboard</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -115,7 +118,7 @@ function renderHTML(leads: any[], conversacion: any[], leadActivo: any, selected
       height: 100vh;
     }
 
-    /* ─── Sidebar ─── */
+    /* --- Sidebar --- */
     .sidebar {
       width: 320px;
       border-right: 1px solid #2a2a2a;
@@ -212,7 +215,7 @@ function renderHTML(leads: any[], conversacion: any[], leadActivo: any, selected
 
     .lead-time { font-size: 11px; color: #666; }
 
-    /* ─── Main ─── */
+    /* --- Main --- */
     .main {
       flex: 1;
       display: flex;
@@ -243,7 +246,7 @@ function renderHTML(leads: any[], conversacion: any[], leadActivo: any, selected
 
     .detail-item { display: flex; gap: 4px; align-items: center; }
 
-    /* ─── Chat ─── */
+    /* --- Chat --- */
     .chat {
       flex: 1;
       overflow-y: auto;
@@ -290,7 +293,7 @@ function renderHTML(leads: any[], conversacion: any[], leadActivo: any, selected
 
     .outbound .msg-time { color: #a5b4fc; }
 
-    /* ─── Empty State ─── */
+    /* --- Empty State --- */
     .empty-state {
       flex: 1;
       display: flex;
@@ -303,7 +306,7 @@ function renderHTML(leads: any[], conversacion: any[], leadActivo: any, selected
     .empty-state .icon { font-size: 48px; margin-bottom: 16px; }
     .empty-state p { font-size: 14px; }
 
-    /* ─── Status Badges ─── */
+    /* --- Status Badges --- */
     .status-badge {
       font-size: 11px;
       padding: 2px 8px;
@@ -320,13 +323,13 @@ function renderHTML(leads: any[], conversacion: any[], leadActivo: any, selected
     .status-tour_confirmed { background: #1e3b2f; color: #34d399; }
     .status-closed_won { background: #1e3b1e; color: #4ade80; }
 
-    /* ─── Scrollbar ─── */
+    /* --- Scrollbar --- */
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
     ::-webkit-scrollbar-thumb:hover { background: #555; }
 
-    /* ─── Responsive ─── */
+    /* --- Responsive --- */
     @media (max-width: 768px) {
       .sidebar { width: 100%; }
       .main { display: ${selectedSender ? "flex" : "none"}; }
