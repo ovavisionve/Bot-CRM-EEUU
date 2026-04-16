@@ -191,7 +191,38 @@ Deno.serve(async (req) => {
             last_contacted_at: new Date().toISOString(),
           })
 
-          // 9. Notificar al admin si el feature está activo
+          // 9. Si tour_calendar está ON y se confirmó tour -> crear registro en tours
+          const acabaDeConfirmarTour = (
+            (nuevoEstado.status === "tour_confirmed" || nuevoEstado.tour_confirmed === true) &&
+            lead.status !== "tour_confirmed" &&
+            !!leadActualizado.tour_date
+          )
+          if (acabaDeConfirmarTour && tenant.features?.tour_calendar) {
+            try {
+              const { createClient: cc } = await import("https://esm.sh/@supabase/supabase-js@2")
+              const sb = cc(
+                Deno.env.get("SUPABASE_URL")!,
+                Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+              )
+              // Parsear la fecha del tour (texto libre) - si falla, usar fecha actual + 3 días
+              let scheduled = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString()
+              const parsed = Date.parse(leadActualizado.tour_date)
+              if (!isNaN(parsed)) scheduled = new Date(parsed).toISOString()
+
+              await sb.from("tours").insert({
+                tenant_id: tenant.id,
+                lead_id: lead.id,
+                scheduled_at: scheduled,
+                status: "scheduled",
+                notes: `Auto-creado por el bot. Propiedad: ${leadActualizado.selected_property_name || "N/A"}. Fecha original: ${leadActualizado.tour_date}`,
+              })
+              console.log(`[webhook:POST][${tenant.slug}] Tour auto-creado para ${senderId}`)
+            } catch (err) {
+              console.error("[webhook:POST] Error creando tour:", err)
+            }
+          }
+
+          // 10. Notificar al admin si el feature está activo
           if (tenant.features?.admin_email_notifications) {
             const leadName = leadActualizado.name || undefined
             if (nuevoEstado.status === "tour_confirmed" || nuevoEstado.tour_confirmed === true) {
