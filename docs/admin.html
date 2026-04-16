@@ -184,6 +184,62 @@
     .toast.show { opacity: 1; }
     .toast.error { background: var(--danger); }
 
+    /* Wizard */
+    .wizard {
+      background: var(--surface); border-radius: 12px;
+      width: 640px; max-width: 95vw; max-height: 92vh; overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    }
+    .wizard-head { padding: 20px 24px; border-bottom: 1px solid var(--border); }
+    .wizard-head h2 { font-size: 20px; color: var(--text); margin-bottom: 4px; }
+    .wizard-head .sub { font-size: 13px; color: var(--text-soft); }
+    .wizard-progress {
+      display: flex; gap: 4px; padding: 12px 24px; background: var(--surface-alt);
+      border-bottom: 1px solid var(--border);
+    }
+    .wizard-step-indicator {
+      flex: 1; height: 4px; background: var(--border); border-radius: 2px;
+    }
+    .wizard-step-indicator.done { background: var(--success); }
+    .wizard-step-indicator.active { background: var(--brand); }
+    .wizard-body { padding: 24px; }
+    .wizard-body h3 { font-size: 15px; color: var(--text); margin-bottom: 12px; font-weight: 600; }
+    .wizard-body label {
+      display: block; font-size: 12px; color: var(--text-soft);
+      margin-bottom: 4px; margin-top: 12px; font-weight: 500;
+    }
+    .wizard-body input, .wizard-body select, .wizard-body textarea {
+      width: 100%; padding: 10px 12px; background: var(--surface-alt);
+      color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+      font-size: 14px; font-family: inherit;
+    }
+    .wizard-body input:focus, .wizard-body select:focus, .wizard-body textarea:focus {
+      outline: none; border-color: var(--brand); background: var(--surface);
+    }
+    .wizard-two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .wizard-foot {
+      padding: 16px 24px; border-top: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center; gap: 8px;
+    }
+    .review-box {
+      background: var(--surface-alt); border: 1px solid var(--border);
+      padding: 14px; border-radius: 8px; font-size: 13px;
+    }
+    .review-box div { margin-bottom: 4px; color: var(--text); }
+    .review-box strong { color: var(--text-soft); font-weight: 500; }
+    .ai-voice-preview {
+      background: var(--brand-soft); color: var(--text);
+      padding: 12px; border-radius: 8px; border-left: 3px solid var(--brand);
+      font-size: 13px; margin-top: 12px; white-space: pre-wrap;
+    }
+    .btn-gen {
+      background: var(--brand-soft); color: var(--brand); border: 1px solid var(--brand);
+      padding: 8px 14px; border-radius: 6px; cursor: pointer;
+      font-size: 13px; font-weight: 600; margin-top: 8px;
+    }
+    .btn-gen:hover { background: var(--brand); color: white; }
+    .btn-gen:disabled { opacity: 0.6; cursor: not-allowed; }
+
     ::-webkit-scrollbar { width: 10px; height: 10px; }
     ::-webkit-scrollbar-track { background: var(--bg); }
     ::-webkit-scrollbar-thumb { background: #bcc0c4; border-radius: 5px; border: 2px solid var(--bg); }
@@ -210,42 +266,27 @@
     </div>
   </div>
 
-  <!-- Modal crear tenant -->
+  <!-- Wizard onboarding nuevo cliente -->
   <div class="modal-overlay" id="new-tenant-modal">
-    <div class="modal">
-      <h2>Nuevo cliente</h2>
-      <label>Nombre del negocio</label>
-      <input id="nt-name" placeholder="Ej: María Real Estate" />
-      <label>Slug (URL-safe, sin espacios)</label>
-      <input id="nt-slug" placeholder="Ej: maria-re" />
-      <label>Nombre del agente</label>
-      <input id="nt-agent-name" placeholder="Ej: María González" />
-      <label>Email del agente (será su login)</label>
-      <input id="nt-agent-email" type="email" placeholder="maria@ejemplo.com" />
-      <label>Contraseña inicial del cliente</label>
-      <input id="nt-password" type="text" placeholder="Password que le mandas al cliente" />
-      <label>Teléfono / WhatsApp</label>
-      <input id="nt-agent-phone" placeholder="+1..." />
-      <label>Idioma preferido</label>
-      <select id="nt-lang"><option value="en">English</option><option value="es">Español</option></select>
-      <label>Instagram User ID</label>
-      <input id="nt-ig-id" placeholder="17841..." />
-      <label>Instagram handle</label>
-      <input id="nt-ig-handle" placeholder="maria_re" />
-      <label>Instagram Access Token (IGAA...)</label>
-      <input id="nt-ig-token" placeholder="IGAAM..." />
-      <label>Google Sheet ID (opcional)</label>
-      <input id="nt-sheet-id" placeholder="1Z-4G..." />
-      <label>Plan</label>
-      <select id="nt-plan">
-        <option value="starter">Starter</option>
-        <option value="pro">Pro</option>
-        <option value="agency">Agency</option>
-        <option value="custom">Custom</option>
-      </select>
-      <div style="display:flex; gap:8px; margin-top:20px; justify-content:flex-end;">
+    <div class="wizard">
+      <div class="wizard-head">
+        <h2 id="wiz-title">Nuevo cliente — Paso 1 de 5</h2>
+        <div class="sub" id="wiz-sub">Datos básicos del agente y su negocio</div>
+      </div>
+      <div class="wizard-progress" id="wiz-progress">
+        <div class="wizard-step-indicator active"></div>
+        <div class="wizard-step-indicator"></div>
+        <div class="wizard-step-indicator"></div>
+        <div class="wizard-step-indicator"></div>
+        <div class="wizard-step-indicator"></div>
+      </div>
+      <div class="wizard-body" id="wiz-body"></div>
+      <div class="wizard-foot">
         <button class="btn btn-secondary" onclick="closeNewTenantModal()">Cancelar</button>
-        <button class="btn" onclick="createTenant()">Crear cliente y usuario</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-secondary" id="wiz-back" onclick="wizardBack()" style="display:none;">← Atrás</button>
+          <button class="btn" id="wiz-next" onclick="wizardNext()">Siguiente →</button>
+        </div>
       </div>
     </div>
   </div>
@@ -302,8 +343,7 @@
     }
     // Features que todavía no están implementadas en el código
     const COMING_SOON = new Set([
-      "sms_bot", "drip_campaigns", "lead_scoring",
-      "white_label", "tour_calendar",
+      "sms_bot", "drip_campaigns", "lead_scoring", "white_label",
     ])
 
     const meRes = await api("?action=me")
@@ -319,9 +359,277 @@
       window.location.href = "login.html"
     }
     window.saveFeatures = saveFeatures
-    window.openNewTenantModal = () => document.getElementById("new-tenant-modal").classList.add("show")
+    let wizStep = 1
+    let wizData = {}
+
+    window.openNewTenantModal = function() {
+      wizStep = 1
+      wizData = {
+        name: "", slug: "", agent_name: "", agent_email: "", password: "",
+        agent_phone: "", agent_language: "en", plan: "starter",
+        instagram_user_id: "", instagram_handle: "", instagram_access_token: "",
+        google_sheet_id: "",
+        voice: { greeting: "", pricing: "", address: "", followup: "", formality: "casual", language_mix: "bilingual" },
+        agent_voice_generated: "",
+        features_preset: "all_on",
+      }
+      renderWizard()
+      document.getElementById("new-tenant-modal").classList.add("show")
+    }
     window.closeNewTenantModal = () => document.getElementById("new-tenant-modal").classList.remove("show")
-    window.createTenant = createTenant
+
+    function renderWizard() {
+      // Guardar valores del paso actual antes de cambiar
+      saveWizardValues()
+
+      const total = 5
+      document.getElementById("wiz-title").textContent = "Nuevo cliente — Paso " + wizStep + " de " + total
+      const subs = {
+        1: "Datos básicos del agente y su negocio",
+        2: "Conexión con Instagram Business",
+        3: "Propiedades a ofrecer",
+        4: "Entrenamiento de voz del bot (IA)",
+        5: "Revisar y crear",
+      }
+      document.getElementById("wiz-sub").textContent = subs[wizStep]
+
+      // Progress bar
+      const indicators = document.querySelectorAll(".wizard-step-indicator")
+      indicators.forEach((el, i) => {
+        el.classList.remove("active", "done")
+        if (i + 1 < wizStep) el.classList.add("done")
+        else if (i + 1 === wizStep) el.classList.add("active")
+      })
+
+      // Botones
+      document.getElementById("wiz-back").style.display = wizStep > 1 ? "inline-block" : "none"
+      document.getElementById("wiz-next").textContent = wizStep === total ? "Crear cliente" : "Siguiente →"
+
+      const body = document.getElementById("wiz-body")
+      if (wizStep === 1) {
+        body.innerHTML =
+          '<h3>Datos básicos</h3>' +
+          '<label>Nombre del negocio *</label><input id="w-name" value="' + esc(wizData.name) + '" placeholder="Ej: María Real Estate" />' +
+          '<label>Slug (URL-safe, sin espacios) *</label><input id="w-slug" value="' + esc(wizData.slug) + '" placeholder="maria-re" />' +
+          '<label>Nombre del agente *</label><input id="w-agent-name" value="' + esc(wizData.agent_name) + '" placeholder="María González" />' +
+          '<div class="wizard-two">' +
+            '<div><label>Email (será su login) *</label><input id="w-agent-email" type="email" value="' + esc(wizData.agent_email) + '" placeholder="maria@ejemplo.com" /></div>' +
+            '<div><label>Contraseña inicial *</label><input id="w-password" type="text" value="' + esc(wizData.password) + '" placeholder="Mínimo 6 caracteres" /></div>' +
+          '</div>' +
+          '<div class="wizard-two">' +
+            '<div><label>Teléfono / WhatsApp</label><input id="w-agent-phone" value="' + esc(wizData.agent_phone) + '" placeholder="+1..." /></div>' +
+            '<div><label>Idioma preferido</label><select id="w-agent-language"><option value="en"' + (wizData.agent_language==="en"?" selected":"") + '>English</option><option value="es"' + (wizData.agent_language==="es"?" selected":"") + '>Español</option></select></div>' +
+          '</div>' +
+          '<label>Plan</label><select id="w-plan">' +
+            '<option value="starter"' + (wizData.plan==="starter"?" selected":"") + '>Starter</option>' +
+            '<option value="pro"' + (wizData.plan==="pro"?" selected":"") + '>Pro</option>' +
+            '<option value="agency"' + (wizData.plan==="agency"?" selected":"") + '>Agency</option>' +
+            '<option value="custom"' + (wizData.plan==="custom"?" selected":"") + '>Custom</option>' +
+          '</select>'
+      } else if (wizStep === 2) {
+        body.innerHTML =
+          '<h3>Instagram Business</h3>' +
+          '<p style="color:var(--text-soft);font-size:13px;margin-bottom:12px;">El cliente debe tener Instagram Business conectado al app de Meta. Estos datos los sacás del panel de Meta Developers.</p>' +
+          '<label>Instagram User ID (el del receptor)</label><input id="w-ig-id" value="' + esc(wizData.instagram_user_id) + '" placeholder="17841..." />' +
+          '<label>Instagram handle (sin @)</label><input id="w-ig-handle" value="' + esc(wizData.instagram_handle) + '" placeholder="maria_re" />' +
+          '<label>Instagram Access Token (IGAA...)</label><input id="w-ig-token" value="' + esc(wizData.instagram_access_token) + '" placeholder="IGAAM..." />' +
+          '<p style="color:var(--text-muted);font-size:12px;margin-top:12px;">Si aún no lo tenés, podés dejar esto vacío y completarlo después desde el admin.</p>'
+      } else if (wizStep === 3) {
+        body.innerHTML =
+          '<h3>Propiedades</h3>' +
+          '<p style="color:var(--text-soft);font-size:13px;margin-bottom:12px;">Si el cliente ya tiene un Google Sheet con sus propiedades, pegá el ID acá. Si no, las puede cargar después en el editor.</p>' +
+          '<label>Google Sheet ID (opcional)</label><input id="w-sheet-id" value="' + esc(wizData.google_sheet_id) + '" placeholder="1Z-4G..." />' +
+          '<p style="color:var(--text-muted);font-size:12px;margin-top:12px;">El sheet debe tener las columnas: Nombre, Dirección, Habitaciones, Baños, Precio, Fees, Fees Incluye, Parking, Promociones, Notas, Disponible. Y estar compartido públicamente en modo lectura.</p>'
+      } else if (wizStep === 4) {
+        const v = wizData.voice
+        body.innerHTML =
+          '<h3>Entrenamiento de voz del bot</h3>' +
+          '<p style="color:var(--text-soft);font-size:13px;margin-bottom:12px;">Respondé como respondería el agente. La IA genera la voz personalizada a partir de estas respuestas.</p>' +
+          '<label>¿Cómo saludás a un lead nuevo?</label><input id="w-v-greeting" value="' + esc(v.greeting) + '" placeholder="Hello, here María, real estate agent..." />' +
+          '<label>¿Cómo presentás los precios?</label><input id="w-v-pricing" value="' + esc(v.pricing) + '" placeholder="The price is 2850, plus 70 in fees..." />' +
+          '<label>¿Qué decís cuando preguntan la dirección?</label><input id="w-v-address" value="' + esc(v.address) + '" placeholder="2901 SW 69th Court, new building..." />' +
+          '<label>¿Cuál es tu mensaje de follow-up favorito?</label><input id="w-v-followup" value="' + esc(v.followup) + '" placeholder="Still interested? Let me know..." />' +
+          '<div class="wizard-two">' +
+            '<div><label>Formalidad</label><select id="w-v-formality">' +
+              '<option value="very_casual"' + (v.formality==="very_casual"?" selected":"") + '>Muy casual</option>' +
+              '<option value="casual"' + (v.formality==="casual"?" selected":"") + '>Casual</option>' +
+              '<option value="professional"' + (v.formality==="professional"?" selected":"") + '>Profesional</option>' +
+            '</select></div>' +
+            '<div><label>Idiomas</label><select id="w-v-language">' +
+              '<option value="bilingual"' + (v.language_mix==="bilingual"?" selected":"") + '>Bilingüe</option>' +
+              '<option value="en"' + (v.language_mix==="en"?" selected":"") + '>Solo inglés</option>' +
+              '<option value="es"' + (v.language_mix==="es"?" selected":"") + '>Solo español</option>' +
+            '</select></div>' +
+          '</div>' +
+          '<button class="btn-gen" id="w-btn-gen" onclick="generateVoice()">✨ Generar voz del bot con IA</button>' +
+          (wizData.agent_voice_generated ? '<div class="ai-voice-preview" id="w-voice-preview">' + esc(wizData.agent_voice_generated) + '</div>' : '')
+      } else if (wizStep === 5) {
+        const w = wizData
+        const features = w.features_preset === "all_on" ? "TODAS ACTIVAS" : "Todas OFF (activás una por una después)"
+        body.innerHTML =
+          '<h3>Revisar y crear</h3>' +
+          '<div class="review-box">' +
+            '<div><strong>Negocio:</strong> ' + esc(w.name || "(vacío)") + ' — slug: ' + esc(w.slug || "(vacío)") + '</div>' +
+            '<div><strong>Agente:</strong> ' + esc(w.agent_name || "") + ' · ' + esc(w.agent_email || "") + '</div>' +
+            '<div><strong>Idioma / Plan:</strong> ' + esc(w.agent_language) + ' · ' + esc(w.plan) + '</div>' +
+            '<div><strong>Instagram:</strong> ' + (w.instagram_handle ? "@" + esc(w.instagram_handle) : "(pendiente)") + (w.instagram_access_token ? " · con token" : " · sin token") + '</div>' +
+            '<div><strong>Sheet:</strong> ' + (w.google_sheet_id ? "Sí" : "No (se carga manual)") + '</div>' +
+            '<div><strong>Voz del bot:</strong> ' + (w.agent_voice_generated ? "Generada con IA ✓" : "Default") + '</div>' +
+          '</div>' +
+          '<label style="margin-top:16px;">Features al crear</label>' +
+          '<select id="w-features-preset">' +
+            '<option value="all_on"' + (w.features_preset==="all_on"?" selected":"") + '>TODO activado (para probar)</option>' +
+            '<option value="minimal"' + (w.features_preset==="minimal"?" selected":"") + '>Solo lo básico (instagram_bot + ai_responses + dashboard_access)</option>' +
+            '<option value="none"' + (w.features_preset==="none"?" selected":"") + '>Todo OFF (activar manualmente después)</option>' +
+          '</select>' +
+          '<p style="color:var(--text-muted);font-size:12px;margin-top:12px;">Se creará el tenant, el usuario del agente y se le enviará un email de bienvenida con sus credenciales.</p>'
+      }
+    }
+
+    function saveWizardValues() {
+      const v = id => document.getElementById(id)?.value
+      if (wizStep === 1) {
+        if (v("w-name") !== undefined) {
+          wizData.name = v("w-name")
+          wizData.slug = v("w-slug")
+          wizData.agent_name = v("w-agent-name")
+          wizData.agent_email = v("w-agent-email")
+          wizData.password = v("w-password")
+          wizData.agent_phone = v("w-agent-phone")
+          wizData.agent_language = v("w-agent-language")
+          wizData.plan = v("w-plan")
+        }
+      } else if (wizStep === 2) {
+        if (v("w-ig-id") !== undefined) {
+          wizData.instagram_user_id = v("w-ig-id")
+          wizData.instagram_handle = v("w-ig-handle")
+          wizData.instagram_access_token = v("w-ig-token")
+        }
+      } else if (wizStep === 3) {
+        if (v("w-sheet-id") !== undefined) wizData.google_sheet_id = v("w-sheet-id")
+      } else if (wizStep === 4) {
+        if (v("w-v-greeting") !== undefined) {
+          wizData.voice = {
+            greeting: v("w-v-greeting"), pricing: v("w-v-pricing"),
+            address: v("w-v-address"), followup: v("w-v-followup"),
+            formality: v("w-v-formality"), language_mix: v("w-v-language"),
+          }
+        }
+      } else if (wizStep === 5) {
+        if (v("w-features-preset") !== undefined) wizData.features_preset = v("w-features-preset")
+      }
+    }
+
+    window.wizardNext = async function() {
+      saveWizardValues()
+      // Validación por paso
+      if (wizStep === 1) {
+        if (!wizData.name || !wizData.slug || !wizData.agent_name || !wizData.agent_email || !wizData.password) {
+          return toast("Completá todos los campos obligatorios", true)
+        }
+        if (wizData.password.length < 6) return toast("La contraseña debe tener 6+ caracteres", true)
+      }
+      if (wizStep === 5) {
+        return finishWizard()
+      }
+      wizStep++
+      renderWizard()
+    }
+    window.wizardBack = function() {
+      saveWizardValues()
+      wizStep--
+      renderWizard()
+    }
+
+    window.generateVoice = async function() {
+      saveWizardValues()
+      const btn = document.getElementById("w-btn-gen")
+      btn.disabled = true; btn.textContent = "Generando..."
+      const r = await api("?action=generate-voice", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          answers: wizData.voice,
+          agent_name: wizData.agent_name,
+          area: "Miami", // podría ser un campo extra
+        }),
+      })
+      btn.disabled = false; btn.textContent = "✨ Generar voz del bot con IA"
+      if (r.ok) {
+        wizData.agent_voice_generated = r.agent_voice
+        renderWizard()
+        toast("Voz generada")
+      } else {
+        toast(r.error || "Error generando voz", true)
+      }
+    }
+
+    async function finishWizard() {
+      const w = wizData
+      // 1. Crear tenant
+      const rt = await api("?action=create-tenant", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: w.name, slug: w.slug,
+          agent_name: w.agent_name, agent_email: w.agent_email,
+          agent_phone: w.agent_phone, agent_language: w.agent_language,
+          instagram_user_id: w.instagram_user_id,
+          instagram_handle: w.instagram_handle,
+          instagram_access_token: w.instagram_access_token,
+          google_sheet_id: w.google_sheet_id, plan: w.plan,
+        }),
+      })
+      if (!rt.ok) return toast(rt.error || "Error creando tenant", true)
+
+      // 2. Aplicar features según preset
+      let features = {}
+      const allFeatures = [
+        "instagram_bot","ai_responses","google_sheets_properties","ai_memory_extraction",
+        "auto_followups","admin_email_notifications","handoff_to_human","multi_language",
+        "dashboard_access","sms_bot","drip_campaigns","lead_scoring","analytics","white_label",
+        "tour_calendar","custom_bot_voice","properties_editor","pipeline_kanban","lead_editing",
+        "manual_messaging","reports_export",
+      ]
+      for (const f of allFeatures) features[f] = false
+      if (w.features_preset === "all_on") {
+        for (const f of allFeatures) {
+          features[f] = !["sms_bot","drip_campaigns","lead_scoring","white_label"].includes(f)
+        }
+      } else if (w.features_preset === "minimal") {
+        features.instagram_bot = true
+        features.ai_responses = true
+        features.dashboard_access = true
+        features.admin_email_notifications = true
+      }
+      await api("?action=update-features", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: w.slug, features }),
+      })
+
+      // 3. Si se generó voz, guardarla en agent_configs
+      if (w.agent_voice_generated) {
+        await api("?action=update-agent-config", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ slug: w.slug, updates: { agent_voice: w.agent_voice_generated } }),
+        })
+      }
+
+      // 4. Crear usuario + mandar email de bienvenida
+      const ru = await api("?action=create-user", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: w.agent_email, password: w.password,
+          tenant_id: rt.tenant.id, role: "tenant_admin", name: w.agent_name,
+          send_welcome_email: true,
+        }),
+      })
+      if (!ru.ok) return toast("Tenant creado pero falló usuario: " + (ru.error || ""), true)
+
+      toast("Cliente creado, email enviado")
+      closeNewTenantModal()
+      loadTenants()
+    }
+
+    window.createTenant = finishWizard  // legacy link
     window.impersonate = impersonate
     window.toggleExportMenu = function(slug) {
       document.querySelectorAll(".export-dropdown").forEach(d => {
@@ -454,48 +762,7 @@
       window.open("dashboard.html?tenant=" + slug, "_blank")
     }
 
-    async function createTenant() {
-      const body = {
-        name: v("nt-name"), slug: v("nt-slug"),
-        agent_name: v("nt-agent-name"),
-        agent_email: v("nt-agent-email"),
-        agent_phone: v("nt-agent-phone"),
-        agent_language: v("nt-lang"),
-        instagram_user_id: v("nt-ig-id"),
-        instagram_handle: v("nt-ig-handle"),
-        instagram_access_token: v("nt-ig-token"),
-        google_sheet_id: v("nt-sheet-id"),
-        plan: v("nt-plan"),
-      }
-      const password = v("nt-password")
-      if (!body.name || !body.slug || !body.agent_name || !body.agent_email) {
-        return toast("Nombre, slug, agente y email son obligatorios", true)
-      }
-      if (!password || password.length < 6) {
-        return toast("Password mínimo 6 caracteres", true)
-      }
-      // 1. Crear tenant
-      const r = await api("?action=create-tenant", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      })
-      if (!r.ok) return toast(r.error || "Error creando tenant", true)
-
-      // 2. Crear usuario con email + password asociado al tenant
-      const u = await api("?action=create-user", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: body.agent_email, password,
-          tenant_id: r.tenant.id, role: "tenant_admin",
-          name: body.agent_name,
-        }),
-      })
-      if (!u.ok) return toast("Tenant creado pero falló usuario: " + (u.error || ""), true)
-
-      toast("Cliente y usuario creados")
-      closeNewTenantModal()
-      loadTenants()
-    }
+    // createTenant antigua reemplazada por el wizard (finishWizard)
 
     function v(id) { return (document.getElementById(id)?.value || "").trim() }
 

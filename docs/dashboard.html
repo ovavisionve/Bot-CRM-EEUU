@@ -478,6 +478,67 @@
     .prop-badge.unavail { background: var(--danger-bg); color: var(--danger); }
     .prop-badge.inactive { background: var(--surface-alt); color: var(--text-muted); }
 
+    /* Tour Calendar */
+    .tours-view { padding: 20px 24px; overflow-y: auto; height: 100%; background: var(--bg); }
+    .tours-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .tours-header h2 { font-size: 22px; color: var(--text); }
+    .calendar {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      padding: 16px; margin-bottom: 20px;
+    }
+    .calendar-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .calendar-nav h3 { font-size: 18px; color: var(--text); font-weight: 600; text-transform: capitalize; }
+    .calendar-nav button {
+      background: var(--surface-alt); border: 1px solid var(--border); color: var(--text);
+      padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 14px;
+    }
+    .calendar-nav button:hover { background: var(--brand-soft); color: var(--brand); }
+    .calendar-grid {
+      display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;
+      background: var(--border); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+    }
+    .cal-dow {
+      background: var(--surface-alt); padding: 8px; text-align: center;
+      font-size: 11px; color: var(--text-soft); font-weight: 700; text-transform: uppercase;
+    }
+    .cal-day {
+      background: var(--surface); min-height: 80px; padding: 6px; position: relative;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .cal-day:hover { background: var(--surface-alt); }
+    .cal-day.other-month { opacity: 0.4; }
+    .cal-day.today .cal-day-num {
+      background: var(--brand); color: white; border-radius: 50%;
+      width: 24px; height: 24px; display: inline-flex;
+      align-items: center; justify-content: center;
+    }
+    .cal-day-num { font-size: 13px; color: var(--text); font-weight: 600; }
+    .cal-dot {
+      display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+      background: var(--brand); margin-right: 2px; margin-top: 4px;
+    }
+    .cal-event {
+      font-size: 10px; background: var(--brand-soft); color: var(--brand);
+      padding: 2px 4px; border-radius: 3px; margin-top: 3px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .cal-event.confirmed { background: var(--success-bg); color: var(--success); }
+    .cal-event.completed { background: var(--surface-alt); color: var(--text-muted); }
+    .tours-list {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px;
+    }
+    .tours-list h3 { font-size: 14px; color: var(--text); margin-bottom: 12px; }
+    .tour-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 14px; background: var(--surface-alt); border-radius: 8px;
+      border: 1px solid var(--border); margin-bottom: 8px; cursor: pointer;
+      transition: border 0.15s;
+    }
+    .tour-item:hover { border-color: var(--brand); }
+    .tour-when { font-weight: 600; color: var(--text); font-size: 14px; }
+    .tour-who { color: var(--text-soft); font-size: 12px; margin-top: 2px; }
+    .tour-status { display: flex; align-items: center; gap: 6px; }
+
     @media (max-width: 768px) {
       .sidebar { width: 100%; }
     }
@@ -514,6 +575,7 @@
         <button class="nav-btn" data-main-view="pipeline" data-feature="pipeline_kanban" onclick="setMainView('pipeline')">📊 Pipeline</button>
         <button class="nav-btn" data-main-view="analytics" data-feature="analytics" onclick="setMainView('analytics')">📈 Analytics</button>
         <button class="nav-btn" data-main-view="properties" data-feature="properties_editor" onclick="setMainView('properties')">🏠 Propiedades</button>
+        <button class="nav-btn" data-main-view="tours" data-feature="tour_calendar" onclick="setMainView('tours')">📅 Tours</button>
       </div>
       <div id="main-content" style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
         <div class="empty-state">
@@ -751,6 +813,8 @@
         renderAnalytics()
       } else if (currentMainView === "properties") {
         renderProperties()
+      } else if (currentMainView === "tours") {
+        renderTours()
       } else {
         // inbox
         if (selectedLead) {
@@ -819,6 +883,121 @@
       }
       html += '</div>'
       mc.innerHTML = html
+    }
+
+    let toursCache = []
+    let calCursor = new Date()
+
+    async function renderTours() {
+      const mc = document.getElementById("main-content")
+      mc.innerHTML = '<div class="tours-view"><div style="color:#666;padding:40px;text-align:center;">Cargando tours...</div></div>'
+
+      const year = calCursor.getFullYear()
+      const month = calCursor.getMonth()
+      const from = new Date(year, month, 1).toISOString()
+      const to = new Date(year, month + 1, 0, 23, 59, 59).toISOString()
+
+      const slug = currentTenant?.slug || ""
+      const res = await api("?action=tours&tenant=" + slug + "&from=" + from + "&to=" + to)
+      toursCache = res.tours || []
+
+      // Próximos 14 días
+      const upcomingFrom = new Date().toISOString()
+      const upcomingTo = new Date(Date.now() + 14*24*60*60*1000).toISOString()
+      const upcRes = await api("?action=tours&tenant=" + slug + "&from=" + upcomingFrom + "&to=" + upcomingTo)
+      const upcoming = upcRes.tours || []
+
+      // Build calendar
+      const monthName = calCursor.toLocaleString("es", { month: "long", year: "numeric" })
+      const firstDay = new Date(year, month, 1).getDay() // 0=Sun
+      const daysInMonth = new Date(year, month + 1, 0).getDate()
+      const todayStr = new Date().toISOString().slice(0, 10)
+
+      // Agrupar tours por fecha
+      const byDate = {}
+      for (const t of toursCache) {
+        const key = t.scheduled_at.slice(0, 10)
+        if (!byDate[key]) byDate[key] = []
+        byDate[key].push(t)
+      }
+
+      let calHTML = '<div class="calendar">' +
+        '<div class="calendar-nav">' +
+          '<button onclick="shiftMonth(-1)">‹ Anterior</button>' +
+          '<h3>' + esc(monthName) + '</h3>' +
+          '<button onclick="shiftMonth(1)">Siguiente ›</button>' +
+        '</div>' +
+        '<div class="calendar-grid">'
+      const dows = ["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"]
+      for (const d of dows) calHTML += '<div class="cal-dow">' + d + '</div>'
+
+      // Celdas en blanco antes del día 1
+      for (let i = 0; i < firstDay; i++) calHTML += '<div class="cal-day other-month"></div>'
+
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateKey = new Date(year, month, d).toISOString().slice(0, 10)
+        const isToday = dateKey === todayStr
+        const events = byDate[dateKey] || []
+        calHTML += '<div class="cal-day' + (isToday ? ' today' : '') + '">' +
+          '<span class="cal-day-num">' + d + '</span>'
+        for (const ev of events.slice(0, 3)) {
+          const time = new Date(ev.scheduled_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})
+          const name = ev.leads?.name || "Lead"
+          const cls = ev.status === "confirmed" ? " confirmed" : ev.status === "completed" ? " completed" : ""
+          calHTML += '<div class="cal-event' + cls + '">' + time + ' ' + esc(name) + '</div>'
+        }
+        if (events.length > 3) calHTML += '<div class="cal-event">+' + (events.length - 3) + ' más</div>'
+        calHTML += '</div>'
+      }
+      calHTML += '</div></div>'
+
+      // Upcoming list
+      let listHTML = '<div class="tours-list">' +
+        '<h3>Próximos 14 días (' + upcoming.length + ')</h3>'
+      if (upcoming.length === 0) {
+        listHTML += '<div style="color:var(--text-muted);padding:20px;text-align:center;">Sin tours agendados próximos.</div>'
+      } else {
+        for (const t of upcoming) {
+          const dt = new Date(t.scheduled_at)
+          const when = dt.toLocaleDateString("es", { weekday: "short", day: "numeric", month: "short" }) +
+            " · " + dt.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})
+          const name = t.leads?.name || "Lead " + (t.leads?.sender_id || "")
+          listHTML += '<div class="tour-item" onclick="openTourModal(' + t.id + ')">' +
+            '<div><div class="tour-when">' + esc(when) + '</div>' +
+            '<div class="tour-who">' + esc(name) + (t.notes ? ' · ' + esc(t.notes.substring(0, 60)) : '') + '</div></div>' +
+            '<div class="tour-status"><span class="status-badge status-' +
+              (t.status === "confirmed" ? "tour_confirmed" : "touring") + '">' + t.status + '</span></div>' +
+          '</div>'
+        }
+      }
+      listHTML += '</div>'
+
+      mc.innerHTML = '<div class="tours-view">' +
+        '<div class="tours-header"><h2>📅 Tours agendados</h2></div>' +
+        calHTML + listHTML + '</div>'
+    }
+
+    window.shiftMonth = function(delta) {
+      calCursor = new Date(calCursor.getFullYear(), calCursor.getMonth() + delta, 1)
+      renderTours()
+    }
+
+    window.openTourModal = function(tourId) {
+      const t = toursCache.find(x => x.id === tourId)
+      if (!t) {
+        // Maybe en upcoming, pedirlo del backend
+        return
+      }
+      const currentStatus = t.status || "scheduled"
+      const newStatus = prompt("Status actual: " + currentStatus + "\n\nCambiar a: scheduled | confirmed | completed | no_show | cancelled | rescheduled\n(Dejar vacío para cancelar)", currentStatus)
+      if (!newStatus || newStatus === currentStatus) return
+      api("?action=update-tour", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: tourId, updates: { status: newStatus } }),
+      }).then(r => {
+        if (r.ok) { toast("Tour actualizado"); renderTours() }
+        else toast(r.error || "Error", true)
+      })
     }
 
     window.openNewPropModal = function() {

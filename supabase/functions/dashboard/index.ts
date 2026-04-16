@@ -139,7 +139,7 @@ Deno.serve(async (req) => {
   // ─── POST ?action=create-user — super admin crea usuario para un tenant ───
   if (req.method === "POST" && action === "create-user") {
     if (!isSuperAdmin(user)) return json({ error: "Forbidden" }, 403)
-    const { email, password, tenant_id, role, name } = await req.json()
+    const { email, password, tenant_id, role, name, send_welcome_email } = await req.json()
 
     const { data, error } = await supabase.auth.admin.createUser({
       email,
@@ -152,6 +152,48 @@ Deno.serve(async (req) => {
       },
     })
     if (error) return json({ error: error.message }, 500)
+
+    // Enviar email de bienvenida vía Gmail webhook (opcional)
+    if (send_welcome_email !== false) {
+      const gmailWebhook = Deno.env.get("GMAIL_WEBHOOK_URL")
+      if (gmailWebhook) {
+        const loginUrl = "https://ovavisionve.github.io/Bot-CRM-EEUU/login.html"
+        const html = `
+<!DOCTYPE html><html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#1c1e21;">
+  <div style="background:#1877f2;color:white;padding:24px;border-radius:12px 12px 0 0;">
+    <h1 style="margin:0;font-size:22px;">Bienvenido a OVA REAL</h1>
+  </div>
+  <div style="background:#f5f6f7;padding:24px;border-radius:0 0 12px 12px;">
+    <p>Hola ${name || email},</p>
+    <p>Tu cuenta en <strong>OVA REAL</strong> - el CRM de OVA VISION para agentes inmobiliarios - ya está activa.</p>
+    <h3 style="color:#1877f2;margin-top:24px;">Tus credenciales</h3>
+    <div style="background:white;padding:14px;border-radius:8px;border:1px solid #e4e6eb;">
+      <p style="margin:4px 0;"><strong>Email:</strong> ${email}</p>
+      <p style="margin:4px 0;"><strong>Contraseña:</strong> ${password}</p>
+    </div>
+    <p style="margin-top:20px;">Accedé desde:</p>
+    <p><a href="${loginUrl}" style="background:#1877f2;color:white;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:600;display:inline-block;">Abrir el CRM</a></p>
+    <p style="margin-top:20px;color:#65676b;font-size:13px;">Si tenés dudas, respondé a este email.<br>Recomendamos cambiar la contraseña en tu primer login.</p>
+  </div>
+  <p style="text-align:center;color:#8a8d91;font-size:12px;margin-top:24px;">OVA VISION Agency</p>
+</body></html>`
+        try {
+          await fetch(gmailWebhook, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              token: "ova_email_secret_2026",
+              to: email,
+              subject: "Bienvenido a OVA REAL - Tus credenciales de acceso",
+              html,
+            }),
+          })
+        } catch (err) {
+          console.error("[create-user] Error sending welcome email:", err)
+        }
+      }
+    }
+
     return json({ ok: true, user: { id: data.user?.id, email: data.user?.email } })
   }
 
@@ -233,6 +275,129 @@ Deno.serve(async (req) => {
     if (isSuperAdmin(user)) return true // super admin no se bloquea por features
     const { data } = await supabase.from("tenants").select("features").eq("id", tid).maybeSingle()
     return !!data?.features?.[feature]
+  }
+
+  // ─── GET ?action=tours — listar tours del tenant ───
+  if (action === "tours") {
+    let tid: string | null = null
+    const slug = url.searchParams.get("tenant")
+    if (isSuperAdmin(user) && slug) {
+      const { data } = await supabase.from("tenants").select("id").eq("slug", slug).maybeSingle()
+      tid = data?.id || null
+    } else { tid = user.tenant_id }
+    if (!tid) return json({ tours: [] })
+
+    const from = url.searchParams.get("from")
+    const to = url.searchParams.get("to")
+    let q = supabase
+      .from("tours")
+      .select("*, leads(name, sender_id, phone, email)")
+      .eq("tenant_id", tid)
+      .order("scheduled_at", { ascending: true })
+    if (from) q = q.gte("scheduled_at", from)
+    if (to) q = q.lte("scheduled_at", to)
+    const { data } = await q
+    return json({ tours: data || [] })
+  }
+
+  // ─── POST ?action=create-tour ───
+  if (req.method === "POST" && action === "create-tour") {
+    const body = await req.json()
+    const tid = isSuperAdmin(user) && body.tenant_slug
+      ? (await supabase.from("tenants").select("id").eq("slug", body.tenant_slug).maybeSingle()).data?.id
+      : user.tenant_id
+    if (!tid) return json({ error: "No tenant" }, 404)
+    if (!canAccessTenant(user, tid)) return json({ error: "Forbidden" }, 403)
+    if (!(await checkFeature(tid, "tour_calendar"))) return json({ error: "Feature tour_calendar no activa" }, 403)
+
+    const { data, error } = await supabase
+      .from("tours")
+      .insert({
+        tenant_id: tid,
+        lead_id: body.lead_id,
+        property_id: body.property_id || null,
+        scheduled_at: body.scheduled_at,
+        duration_minutes: body.duration_minutes || 30,
+        status: body.status || "scheduled",
+        notes: body.notes,
+      })
+      .select()
+      .single()
+    if (error) return json({ error: error.message }, 500)
+    return json({ ok: true, tour: data })
+  }
+
+  // ─── POST ?action=update-tour ───
+  if (req.method === "POST" && action === "update-tour") {
+    const { id, updates } = await req.json()
+    const { data: t } = await supabase.from("tours").select("tenant_id").eq("id", id).maybeSingle()
+    if (!t) return json({ error: "Not found" }, 404)
+    if (!canAccessTenant(user, t.tenant_id)) return json({ error: "Forbidden" }, 403)
+    if (!(await checkFeature(t.tenant_id, "tour_calendar"))) return json({ error: "Feature tour_calendar no activa" }, 403)
+
+    const allowed: Record<string, unknown> = {}
+    for (const k of ["scheduled_at", "duration_minutes", "status", "notes", "outcome", "reminder_sent", "confirmation_sent"]) {
+      if (k in updates) allowed[k] = updates[k]
+    }
+    const { error } = await supabase
+      .from("tours")
+      .update({ ...allowed, updated_at: new Date().toISOString() })
+      .eq("id", id)
+    if (error) return json({ error: error.message }, 500)
+    return json({ ok: true })
+  }
+
+  // ─── POST ?action=delete-tour ───
+  if (req.method === "POST" && action === "delete-tour") {
+    const { id } = await req.json()
+    const { data: t } = await supabase.from("tours").select("tenant_id").eq("id", id).maybeSingle()
+    if (!t) return json({ error: "Not found" }, 404)
+    if (!canAccessTenant(user, t.tenant_id)) return json({ error: "Forbidden" }, 403)
+    const { error } = await supabase.from("tours").delete().eq("id", id)
+    if (error) return json({ error: error.message }, 500)
+    return json({ ok: true })
+  }
+
+  // ─── POST ?action=generate-voice — genera agent_voice con IA según cuestionario ───
+  if (req.method === "POST" && action === "generate-voice") {
+    if (!isSuperAdmin(user)) return json({ error: "Forbidden" }, 403)
+    const { answers, agent_name, area } = await req.json()
+    const apiKey = Deno.env.get("OPENROUTER_API_KEY")
+    if (!apiKey) return json({ error: "OPENROUTER_API_KEY no configurado" }, 500)
+
+    const prompt = `Given these real estate agent voice training answers, generate a concise English description (max 150 words) to use as system prompt "agent_voice" for a conversational AI bot that impersonates the agent.
+
+Agent: ${agent_name || "Unknown"}
+Area: ${area || "Unknown"}
+
+Q: How do you greet a new lead? A: ${answers.greeting || ""}
+Q: How do you present prices? A: ${answers.pricing || ""}
+Q: What do you say when asked about address? A: ${answers.address || ""}
+Q: What's your typical follow-up message? A: ${answers.followup || ""}
+Q: Formality level (very_casual / casual / professional): ${answers.formality || "casual"}
+Q: Language mix (en / es / bilingual): ${answers.language_mix || "bilingual"}
+
+Return ONLY the description, no explanation. Include: the agent's name, area, personality traits (casual/direct/friendly), typical sentence patterns, language preferences, and any characteristic phrases. Write it as instructions to an AI like "You are [name], a [role] in [area]. You speak..."`
+
+    try {
+      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          max_tokens: 400,
+          messages: [{ role: "user", content: prompt }],
+        }),
+      })
+      const data = await res.json()
+      const voice = data.choices?.[0]?.message?.content?.trim() || ""
+      return json({ ok: true, agent_voice: voice })
+    } catch (err) {
+      return json({ error: String(err) }, 500)
+    }
   }
 
   // ─── GET ?action=properties — listar propiedades del tenant ───

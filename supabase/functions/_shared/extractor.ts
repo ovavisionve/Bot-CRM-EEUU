@@ -57,13 +57,18 @@ FULL CONVERSATION (most recent at bottom):
 ${conversacion}
 Lead (LATEST): ${mensajeNuevo}
 
-EXTRACTION RULES:
-- The LATEST message is the most important. If the lead mentions a property by name in their latest message, that IS their selected property.
-- "Confirm X", "at X", "the X one", "X is better" → clearly choosing property X
-- If lead mentions a specific date/time AND a property in same message → tour_confirmed = true
-- If the lead already confirmed names earlier, don't lose them
-- Don't downgrade fields: if status was "tour_confirmed" don't change it to "touring" unless user cancels
-- If the lead is frustrated with the bot repeating questions, that doesn't change any extracted data
+EXTRACTION RULES (CRITICAL):
+- The LATEST message is the MOST IMPORTANT. Read it carefully.
+- If the lead replies with just a property name like "Coral Terrace", "Flagami", "Bird Road" → that's selected_property_name. Match the exact property name from the conversation history (the one the agent offered).
+- "Confirm X", "at X", "the X one", "X is better", "quiero X", "me interesa X" → selected property
+- If lead mentions a specific day/time + has selected a property → tour_date = that day/time
+- Names like "Valeria Rodrigues", "Luis Ilarraza" → name (and partner_name if two names given)
+- "solo" / "alone" → occupants = "solo"; "con pareja" / "with partner" → "pareja"
+- "si", "yes", "perfecto" as answer to credit 620+ question → credit_qualified; if asked for number, infer credit_score or leave null
+- Answer to "1BR/2BR/studio?" → extract to preferred_unit (e.g. "2BR/2BA")
+- Don't downgrade fields: if selected_property_name was set, don't null it unless user explicitly changes choice
+- If the lead is frustrated with the bot repeating questions, extract data from history aggressively and set status forward
+- IMPORTANT: preserve previously known data if the latest message doesn't change it
 
 Return JSON (use null ONLY if truly unknown, not if previously known):
 {

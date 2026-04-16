@@ -11,7 +11,8 @@ interface NotificarData {
   tenant?: Partial<Tenant> | null
 }
 
-const EVENTOS_IMPORTANTES = ["tour_agendado", "calificado", "handoff", "disqualified"]
+// Solo estos tipos disparan email al admin. El resto queda en logs.
+const EVENTOS_IMPORTANTES = ["tour_agendado", "handoff"]
 const EMAIL_TOKEN = "ova_email_secret_2026"
 
 export async function notificarAdmin(data: NotificarData) {
