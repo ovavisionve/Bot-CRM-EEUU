@@ -33,6 +33,21 @@ function json(data: unknown, status = 200): Response {
   })
 }
 
+function toCsv(rows: any[]): string {
+  if (!rows || rows.length === 0) return ""
+  const headers = Object.keys(rows[0])
+  const escape = (v: any) => {
+    if (v === null || v === undefined) return ""
+    const s = String(v).replace(/"/g, '""')
+    return /[",\n\r]/.test(s) ? `"${s}"` : s
+  }
+  const lines = [headers.join(",")]
+  for (const row of rows) {
+    lines.push(headers.map((h) => escape(row[h])).join(","))
+  }
+  return lines.join("\n")
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders })
@@ -210,6 +225,113 @@ Deno.serve(async (req) => {
       .eq("id", t.id)
     if (error) return json({ error: error.message }, 500)
     return json({ ok: true })
+  }
+
+  // ─── GET ?action=export&type=leads|conversations|properties|analytics&format=csv|json ───
+  if (action === "export") {
+    const type = url.searchParams.get("type") || "leads"
+    const format = (url.searchParams.get("format") || "csv").toLowerCase()
+    const slug = url.searchParams.get("tenant")
+
+    let tid: string | null = null
+    if (isSuperAdmin(user) && slug) {
+      const { data } = await supabase.from("tenants").select("id").eq("slug", slug).maybeSingle()
+      tid = data?.id || null
+    } else if (!isSuperAdmin(user)) {
+      tid = user.tenant_id
+    } else {
+      const { data } = await supabase.from("tenants").select("id").order("created_at", { ascending: true }).limit(1).maybeSingle()
+      tid = data?.id || null
+    }
+    if (!tid) return json({ error: "No tenant" }, 404)
+
+    let rows: any[] = []
+    let filename = "export"
+
+    if (type === "leads") {
+      const { data } = await supabase
+        .from("leads")
+        .select("sender_id, name, partner_name, phone, email, status, score, language, source, move_in_date, occupants, pets, credit_score, budget_max, preferred_unit, selected_property_name, tour_date, tour_confirmed, ai_active, followup_count, notes, tour_notes, created_at, updated_at, last_contacted_at")
+        .eq("tenant_id", tid)
+        .order("created_at", { ascending: false })
+      rows = data || []
+      filename = "leads_" + new Date().toISOString().slice(0, 10)
+    } else if (type === "conversations") {
+      const leadId = url.searchParams.get("lead")
+      let q = supabase
+        .from("conversations")
+        .select("sender_id, direction, sent_by, channel, message_text, ai_intent, created_at")
+        .eq("tenant_id", tid)
+        .order("created_at", { ascending: true })
+      if (leadId) q = q.eq("sender_id", leadId)
+      const { data } = await q
+      rows = data || []
+      filename = "conversations_" + (leadId || "all") + "_" + new Date().toISOString().slice(0, 10)
+    } else if (type === "properties") {
+      const { data } = await supabase
+        .from("properties")
+        .select("name, address, bedrooms, bathrooms, base_price, fees, parking_fee, promotions, notes, active, available, priority")
+        .eq("tenant_id", tid)
+        .order("priority", { ascending: false })
+      rows = data || []
+      filename = "properties_" + new Date().toISOString().slice(0, 10)
+    } else if (type === "analytics") {
+      // Re-uso la misma lógica: llamar al endpoint analytics internamente
+      const res = await fetch(new URL(url.origin + "/functions/v1/dashboard?action=analytics&tenant=" + encodeURIComponent(slug || "")).toString(), {
+        headers: { Authorization: req.headers.get("Authorization") || "" },
+      })
+      const analyticsData = await res.json()
+      // Flatten para CSV
+      rows = [
+        { metric: "leads_total", value: analyticsData.totals?.leads || 0 },
+        { metric: "leads_today", value: analyticsData.totals?.leads_today || 0 },
+        { metric: "leads_week", value: analyticsData.totals?.leads_week || 0 },
+        { metric: "leads_month", value: analyticsData.totals?.leads_month || 0 },
+        { metric: "messages_total", value: analyticsData.totals?.messages || 0 },
+        { metric: "messages_inbound", value: analyticsData.totals?.inbound || 0 },
+        { metric: "messages_outbound", value: analyticsData.totals?.outbound || 0 },
+        { metric: "avg_response_seconds", value: analyticsData.avg_response_seconds || 0 },
+        { metric: "rate_qualification", value: ((analyticsData.rates?.qualification || 0) * 100).toFixed(1) + "%" },
+        { metric: "rate_tour", value: ((analyticsData.rates?.tour || 0) * 100).toFixed(1) + "%" },
+        { metric: "rate_close", value: ((analyticsData.rates?.close || 0) * 100).toFixed(1) + "%" },
+        ...Object.entries(analyticsData.funnel || {}).map(([k, v]) => ({ metric: "funnel_" + k, value: v })),
+      ]
+      if (format === "json") {
+        return new Response(JSON.stringify(analyticsData, null, 2), {
+          status: 200,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+            "Content-Disposition": `attachment; filename="analytics_${new Date().toISOString().slice(0, 10)}.json"`,
+          },
+        })
+      }
+      filename = "analytics_" + new Date().toISOString().slice(0, 10)
+    } else {
+      return json({ error: "Unknown export type" }, 400)
+    }
+
+    if (format === "json") {
+      return new Response(JSON.stringify(rows, null, 2), {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+          "Content-Disposition": `attachment; filename="${filename}.json"`,
+        },
+      })
+    }
+
+    // CSV con BOM para que Excel abra en UTF-8 correctamente
+    const csv = toCsv(rows)
+    return new Response("\uFEFF" + csv, {
+      status: 200,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${filename}.csv"`,
+      },
+    })
   }
 
   // ─── GET ?action=analytics — métricas del tenant ───

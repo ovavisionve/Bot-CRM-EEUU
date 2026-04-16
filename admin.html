@@ -92,6 +92,23 @@
       padding: 2px 6px; border-radius: 4px; margin-left: 6px;
       font-weight: 700; letter-spacing: 0.5px;
     }
+    .export-dropdown {
+      position: relative; display: inline-block;
+    }
+    .export-dropdown-menu {
+      position: absolute; right: 0; top: 100%; margin-top: 4px;
+      background: #1a1a1a; border: 1px solid #2a2a2a;
+      border-radius: 6px; min-width: 180px; padding: 4px 0;
+      display: none; z-index: 10;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+    .export-dropdown.open .export-dropdown-menu { display: block; }
+    .export-dropdown-menu button {
+      display: block; width: 100%; text-align: left;
+      background: transparent; color: #e0e0e0; border: none;
+      padding: 8px 14px; cursor: pointer; font-size: 12px;
+    }
+    .export-dropdown-menu button:hover { background: #2a2a2a; }
 
     .feature-category {
       font-size: 11px; color: #6366f1; text-transform: uppercase;
@@ -256,6 +273,35 @@
     window.closeNewTenantModal = () => document.getElementById("new-tenant-modal").classList.remove("show")
     window.createTenant = createTenant
     window.impersonate = impersonate
+    window.toggleExportMenu = function(slug) {
+      document.querySelectorAll(".export-dropdown").forEach(d => {
+        if (d.id === "dd-" + slug) d.classList.toggle("open")
+        else d.classList.remove("open")
+      })
+    }
+    window.adminExport = async function(slug, type, format) {
+      document.querySelectorAll(".export-dropdown").forEach(d => d.classList.remove("open"))
+      const qs = new URLSearchParams({ action: "export", type, format, tenant: slug })
+      const res = await fetch(API + "?" + qs.toString(), {
+        headers: { Authorization: "Bearer " + window.token },
+      })
+      if (!res.ok) { toast("Error exportando", true); return }
+      const blob = await res.blob()
+      const cd = res.headers.get("Content-Disposition") || ""
+      const match = cd.match(/filename="?([^"]+)"?/)
+      const filename = match ? match[1] : (type + "_export." + format)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url; a.download = filename
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      toast("Descargado: " + filename)
+    }
+    document.addEventListener("click", function(e) {
+      if (!e.target.closest(".export-dropdown")) {
+        document.querySelectorAll(".export-dropdown").forEach(d => d.classList.remove("open"))
+      }
+    })
 
     async function api(path, init = {}) {
       const res = await fetch(API + path, {
@@ -320,6 +366,17 @@
               '</div>' +
             '</div>' +
             '<div class="tenant-actions">' +
+              '<div class="export-dropdown" id="dd-' + t.slug + '">' +
+                '<button class="btn btn-secondary btn-sm" onclick="toggleExportMenu(\'' + t.slug + '\')">⬇ Exportar</button>' +
+                '<div class="export-dropdown-menu">' +
+                  '<button onclick="adminExport(\'' + t.slug + '\',\'leads\',\'csv\')">Leads CSV</button>' +
+                  '<button onclick="adminExport(\'' + t.slug + '\',\'leads\',\'json\')">Leads JSON</button>' +
+                  '<button onclick="adminExport(\'' + t.slug + '\',\'conversations\',\'csv\')">Conversaciones CSV</button>' +
+                  '<button onclick="adminExport(\'' + t.slug + '\',\'properties\',\'csv\')">Propiedades CSV</button>' +
+                  '<button onclick="adminExport(\'' + t.slug + '\',\'analytics\',\'csv\')">Analytics CSV</button>' +
+                  '<button onclick="adminExport(\'' + t.slug + '\',\'analytics\',\'json\')">Analytics JSON</button>' +
+                '</div>' +
+              '</div>' +
               '<a class="btn btn-secondary btn-sm" href="dashboard.html?tenant=' + t.slug + '" style="text-decoration:none; display:inline-block;">Ver su CRM</a>' +
               '<button class="btn btn-sm" onclick="saveFeatures(\'' + t.slug + '\')">Guardar features</button>' +
             '</div>' +
