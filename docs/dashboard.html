@@ -152,6 +152,37 @@
       font-size: 10px; color: #86efac; margin-top: 2px;
       text-align: right;
     }
+
+    /* Modal edit lead */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+      display: none; align-items: center; justify-content: center; z-index: 500;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: #141414; border: 1px solid #2a2a2a;
+      border-radius: 12px; padding: 24px; width: 560px;
+      max-height: 90vh; overflow-y: auto;
+    }
+    .modal h2 { margin-bottom: 16px; font-size: 18px; }
+    .modal-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px;
+    }
+    .modal-grid label, .modal-full label {
+      display: block; font-size: 12px; color: #888; margin-bottom: 4px;
+    }
+    .modal-grid input, .modal-grid select, .modal-full input, .modal-full textarea {
+      width: 100%; padding: 8px 10px; background: #0f0f0f;
+      color: #e0e0e0; border: 1px solid #333; border-radius: 6px;
+      font-size: 13px; font-family: inherit;
+    }
+    .modal-full { grid-column: 1 / -1; }
+    .edit-btn {
+      background: #1a1a1a; color: #a5b4fc; border: 1px solid #2a2a2a;
+      padding: 4px 10px; border-radius: 6px; cursor: pointer;
+      font-size: 11px; font-weight: 500; margin-left: 8px;
+    }
+    .edit-btn:hover { border-color: #6366f1; color: #c7d2fe; }
     .message { display: flex; max-width: 65%; }
     .message.inbound { align-self: flex-start; }
     .message.outbound { align-self: flex-end; }
@@ -350,6 +381,62 @@
     </div>
   </div>
   <div class="toast" id="toast"></div>
+
+  <!-- Modal editar lead -->
+  <div class="modal-overlay" id="edit-lead-modal">
+    <div class="modal">
+      <h2>Editar lead</h2>
+      <div class="modal-grid">
+        <div><label>Nombre</label><input id="e-name" /></div>
+        <div><label>Nombre pareja</label><input id="e-partner" /></div>
+        <div><label>Teléfono</label><input id="e-phone" /></div>
+        <div><label>Email</label><input id="e-email" type="email" /></div>
+        <div><label>Status</label><select id="e-status">
+          <option value="new">new</option>
+          <option value="contacted">contacted</option>
+          <option value="qualified">qualified</option>
+          <option value="disqualified">disqualified</option>
+          <option value="touring">touring</option>
+          <option value="tour_confirmed">tour_confirmed</option>
+          <option value="closed_won">closed_won</option>
+          <option value="closed_lost">closed_lost</option>
+        </select></div>
+        <div><label>Score (0-100)</label><input id="e-score" type="number" min="0" max="100" /></div>
+        <div><label>Fecha mudanza</label><input id="e-movein" placeholder="June 2026" /></div>
+        <div><label>Ocupantes</label><select id="e-occupants">
+          <option value="">-</option>
+          <option value="solo">solo</option>
+          <option value="pareja">pareja</option>
+          <option value="familia">familia</option>
+        </select></div>
+        <div><label>Mascotas</label><select id="e-pets">
+          <option value="">-</option>
+          <option value="none">none</option>
+          <option value="normal">normal</option>
+          <option value="ESA">ESA</option>
+        </select></div>
+        <div><label>Crédito</label><input id="e-credit" type="number" /></div>
+        <div><label>Presupuesto máx ($)</label><input id="e-budget" type="number" /></div>
+        <div><label>Unidad preferida</label><input id="e-unit" placeholder="2BR/2BA" /></div>
+        <div><label>Idioma</label><select id="e-lang">
+          <option value="en">English</option>
+          <option value="es">Español</option>
+        </select></div>
+        <div class="modal-full"><label>Propiedad seleccionada</label><input id="e-property" placeholder="Coral Terrace 2BR/2BA" /></div>
+        <div><label>Fecha tour</label><input id="e-tour-date" placeholder="Friday 5pm" /></div>
+        <div><label>Tour confirmado</label><select id="e-tour-confirmed">
+          <option value="false">No</option>
+          <option value="true">Sí</option>
+        </select></div>
+        <div class="modal-full"><label>Notas internas</label><textarea id="e-notes" rows="3" placeholder="Notas solo para vos, no las ve el lead"></textarea></div>
+        <div class="modal-full"><label>Notas del tour</label><textarea id="e-tour-notes" rows="2"></textarea></div>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:20px; justify-content:flex-end;">
+        <button class="btn btn-secondary" onclick="closeEditModal()">Cancelar</button>
+        <button class="btn" onclick="saveLeadEdits()">Guardar cambios</button>
+      </div>
+    </div>
+  </div>
 
   <script type="module">
     import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
@@ -659,7 +746,10 @@
         '</div>'
 
       main.innerHTML =
-        '<div class="main-header"><h2>' + esc(name) + '</h2>' + aiBadge + '</div>' +
+        '<div class="main-header">' +
+          '<h2>' + esc(name) + '<button class="edit-btn" onclick="openEditModal(\'' + lead.sender_id + '\')">Editar</button></h2>' +
+          aiBadge +
+        '</div>' +
         detailHTML +
         '<div class="chat-container">' +
           '<div class="chat" id="chat">' + (chatHTML || '<div class="empty-state" style="padding:40px 0;"><p>Sin mensajes aún</p></div>') + '</div>' +
@@ -679,6 +769,77 @@
           }
         })
         input.focus()
+      }
+    }
+
+    window.openEditModal = function(senderId) {
+      const lead = leads.find(l => l.sender_id === senderId)
+      if (!lead) return
+      document.getElementById("e-name").value = lead.name || ""
+      document.getElementById("e-partner").value = lead.partner_name || ""
+      document.getElementById("e-phone").value = lead.phone || ""
+      document.getElementById("e-email").value = lead.email || ""
+      document.getElementById("e-status").value = lead.status || "new"
+      document.getElementById("e-score").value = lead.score || 0
+      document.getElementById("e-movein").value = lead.move_in_date || ""
+      document.getElementById("e-occupants").value = lead.occupants || ""
+      document.getElementById("e-pets").value = lead.pets || ""
+      document.getElementById("e-credit").value = lead.credit_score || ""
+      document.getElementById("e-budget").value = lead.budget_max || ""
+      document.getElementById("e-unit").value = lead.preferred_unit || ""
+      document.getElementById("e-lang").value = lead.language || "en"
+      document.getElementById("e-property").value = lead.selected_property_name || ""
+      document.getElementById("e-tour-date").value = lead.tour_date || ""
+      document.getElementById("e-tour-confirmed").value = lead.tour_confirmed ? "true" : "false"
+      document.getElementById("e-notes").value = lead.notes || ""
+      document.getElementById("e-tour-notes").value = lead.tour_notes || ""
+      document.getElementById("edit-lead-modal").dataset.senderId = senderId
+      document.getElementById("edit-lead-modal").classList.add("show")
+    }
+
+    window.closeEditModal = function() {
+      document.getElementById("edit-lead-modal").classList.remove("show")
+    }
+
+    window.saveLeadEdits = async function() {
+      const modal = document.getElementById("edit-lead-modal")
+      const senderId = modal.dataset.senderId
+      if (!senderId) return
+      const val = id => document.getElementById(id).value.trim()
+      const num = id => {
+        const v = val(id); if (v === "") return null; const n = Number(v); return isNaN(n) ? null : n
+      }
+      const updates = {
+        name: val("e-name") || null,
+        partner_name: val("e-partner") || null,
+        phone: val("e-phone") || null,
+        email: val("e-email") || null,
+        status: val("e-status"),
+        score: num("e-score"),
+        move_in_date: val("e-movein") || null,
+        occupants: val("e-occupants") || null,
+        pets: val("e-pets") || null,
+        credit_score: num("e-credit"),
+        budget_max: num("e-budget"),
+        preferred_unit: val("e-unit") || null,
+        language: val("e-lang"),
+        selected_property_name: val("e-property") || null,
+        tour_date: val("e-tour-date") || null,
+        tour_confirmed: val("e-tour-confirmed") === "true",
+        notes: val("e-notes") || null,
+        tour_notes: val("e-tour-notes") || null,
+      }
+      const r = await api("?action=update-lead", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sender_id: senderId, updates }),
+      })
+      if (r.ok) {
+        toast("Lead actualizado")
+        closeEditModal()
+        await loadLeads()
+        if (selectedLead) selectLead(selectedLead)
+      } else {
+        toast(r.error || "Error", true)
       }
     }
 
