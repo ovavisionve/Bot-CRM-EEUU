@@ -39,7 +39,8 @@ Deno.serve(async (req) => {
 
   const html = renderHTML(leads || [], conversacion, leadActivo, selectedSender)
 
-  return new Response(html, {
+  const body = new TextEncoder().encode(html)
+  return new Response(body, {
     status: 200,
     headers: new Headers({
       "content-type": "text/html; charset=utf-8",
