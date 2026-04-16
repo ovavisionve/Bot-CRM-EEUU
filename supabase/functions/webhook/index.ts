@@ -222,10 +222,17 @@ Deno.serve(async (req) => {
             }
           }
 
-          // 10. Notificar al admin si el feature está activo
+          // 10. Notificar al admin SOLO para tour_agendado (evita spam de emails)
           if (tenant.features?.admin_email_notifications) {
             const leadName = leadActualizado.name || undefined
-            if (nuevoEstado.status === "tour_confirmed" || nuevoEstado.tour_confirmed === true) {
+
+            // Solo notificar si es un cambio GENUINO: el lead no estaba ya en tour_confirmed
+            const nowConfirmed = (
+              nuevoEstado.status === "tour_confirmed" || nuevoEstado.tour_confirmed === true
+            )
+            const wasConfirmed = lead.status === "tour_confirmed" || lead.tour_confirmed === true
+
+            if (nowConfirmed && !wasConfirmed) {
               await notificarAdmin({
                 senderId,
                 leadName,
@@ -233,23 +240,8 @@ Deno.serve(async (req) => {
                 tipo: "tour_agendado",
                 tenant,
               })
-            } else if (nuevoEstado.status === "qualified") {
-              await notificarAdmin({
-                senderId,
-                leadName,
-                mensaje: `Lead calificado`,
-                tipo: "calificado",
-                tenant,
-              })
-            } else if (nuevoEstado.status === "disqualified") {
-              await notificarAdmin({
-                senderId,
-                leadName,
-                mensaje: `Lead descalificado`,
-                tipo: "disqualified",
-                tenant,
-              })
             } else {
+              // Loguear todos los otros eventos pero sin mandar email
               await notificarAdmin({ senderId, mensaje, tenant })
             }
           }

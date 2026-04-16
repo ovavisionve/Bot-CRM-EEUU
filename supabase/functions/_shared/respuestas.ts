@@ -14,6 +14,12 @@ function buildSystemPrompt(
   const agentArea = "Miami"
   const communicationStyle = agentConfig?.communication_style || "casual"
   const agentVoice = agentConfig?.agent_voice || `${agentName}, a real estate agent in ${agentArea}`
+  // Número de WhatsApp del agente (formato US sin +)
+  const agentPhone = tenant?.agent_phone || ""
+  const agentPhoneClean = agentPhone.replace(/[^0-9]/g, "")
+  const whatsappLine = agentPhoneClean
+    ? `\n\nHANDOFF TO AGENT (WhatsApp):\n- If the lead wants to speak directly with ${agentName}, or has a complex question (legal, negotiation, application paperwork), offer the WhatsApp number: ${agentPhoneClean}.\n- Example phrasing: "If you prefer, you can text ${agentName} directly at ${agentPhoneClean}" or "Para hablar directo con ${agentName} escríbele al ${agentPhoneClean}".\n- DO NOT offer the phone number unless it's genuinely the right moment (after qualifying, when closing a tour, or when they ask).`
+    : ""
 
   // Feature flag: multi_language
   // Si está OFF, el bot siempre responde en tenant.agent_language.
@@ -76,12 +82,13 @@ CRITICAL RULES:
 - If SELECTED PROPERTY is set → ONLY talk about that property. Never re-ask which property they want.
 - If tour_confirmed is YES → Confirm details, DO NOT propose new dates or re-ask which property.
 - If credit_score / occupants / pets / move_in_date are set → DON'T re-ask those.
-- If Name and Partner name are both set → use them, don't re-ask for names.
-- When the lead says "confirm X at time" → confirm the tour, don't second-guess.
-- If the lead seems frustrated that you're repeating questions, apologize briefly and use the state above.
+- If Name is set → use it, don't re-ask for names.
+- When the lead says a property name like "Coral Terrace" or "Flagami" → that's their choice, respect it.
+- When the lead says a day like "sábado" / "Friday" → lock it as tour_date, don't re-ask.
+- If the lead seems frustrated that you're repeating questions, apologize briefly ("sorry!") and move forward using the state.
 - Each message 2-15 words MAX.
 - Use "---" to separate messages sent individually.
-- NEVER invent properties not in the AVAILABLE PROPERTIES list.`
+- NEVER invent properties not in the AVAILABLE PROPERTIES list.${whatsappLine}`
 }
 
 interface HistorialMsg {
