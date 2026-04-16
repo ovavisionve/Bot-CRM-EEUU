@@ -227,6 +227,14 @@ Deno.serve(async (req) => {
     return json({ ok: true })
   }
 
+  // Helper: verifica que una feature esté activa para el tenant actual
+  async function checkFeature(tid: string | null, feature: string): Promise<boolean> {
+    if (!tid) return false
+    if (isSuperAdmin(user)) return true // super admin no se bloquea por features
+    const { data } = await supabase.from("tenants").select("features").eq("id", tid).maybeSingle()
+    return !!data?.features?.[feature]
+  }
+
   // ─── GET ?action=properties — listar propiedades del tenant ───
   if (action === "properties") {
     let tid: string | null = null
@@ -255,6 +263,7 @@ Deno.serve(async (req) => {
       : user.tenant_id
     if (!tid) return json({ error: "No tenant" }, 404)
     if (!canAccessTenant(user, tid)) return json({ error: "Forbidden" }, 403)
+    if (!(await checkFeature(tid, "properties_editor"))) return json({ error: "Feature properties_editor no activa" }, 403)
 
     const { data, error } = await supabase
       .from("properties")
@@ -293,6 +302,7 @@ Deno.serve(async (req) => {
     const { data: p } = await supabase.from("properties").select("tenant_id").eq("id", id).maybeSingle()
     if (!p) return json({ error: "Not found" }, 404)
     if (!canAccessTenant(user, p.tenant_id)) return json({ error: "Forbidden" }, 403)
+    if (!(await checkFeature(p.tenant_id, "properties_editor"))) return json({ error: "Feature properties_editor no activa" }, 403)
 
     const allowed: Record<string, unknown> = {}
     const whitelist = [
@@ -318,6 +328,7 @@ Deno.serve(async (req) => {
     const { data: p } = await supabase.from("properties").select("tenant_id").eq("id", id).maybeSingle()
     if (!p) return json({ error: "Not found" }, 404)
     if (!canAccessTenant(user, p.tenant_id)) return json({ error: "Forbidden" }, 403)
+    if (!(await checkFeature(p.tenant_id, "properties_editor"))) return json({ error: "Feature properties_editor no activa" }, 403)
     const { error } = await supabase.from("properties").delete().eq("id", id)
     if (error) return json({ error: error.message }, 500)
     return json({ ok: true })
@@ -325,6 +336,12 @@ Deno.serve(async (req) => {
 
   // ─── GET ?action=export&type=leads|conversations|properties|analytics&format=csv|json ───
   if (action === "export") {
+    // Feature gate: reports_export (super admin siempre puede)
+    if (!isSuperAdmin(user) && user.tenant_id) {
+      if (!(await checkFeature(user.tenant_id, "reports_export"))) {
+        return json({ error: "Feature reports_export no activa" }, 403)
+      }
+    }
     const type = url.searchParams.get("type") || "leads"
     const format = (url.searchParams.get("format") || "csv").toLowerCase()
     const slug = url.searchParams.get("tenant")
@@ -595,6 +612,7 @@ Deno.serve(async (req) => {
       .maybeSingle()
     if (!lead) return json({ error: "Lead not found" }, 404)
     if (!canAccessTenant(user, lead.tenant_id)) return json({ error: "Forbidden" }, 403)
+    if (!(await checkFeature(lead.tenant_id, "lead_editing"))) return json({ error: "Feature lead_editing no activa" }, 403)
 
     // Whitelist de campos editables manualmente
     const allowed: Record<string, unknown> = {}
@@ -628,6 +646,7 @@ Deno.serve(async (req) => {
       .maybeSingle()
     if (!lead) return json({ error: "Lead not found" }, 404)
     if (!canAccessTenant(user, lead.tenant_id)) return json({ error: "Forbidden" }, 403)
+    if (!(await checkFeature(lead.tenant_id, "manual_messaging"))) return json({ error: "Feature manual_messaging no activa" }, 403)
 
     const { data: t } = await supabase
       .from("tenants")
@@ -691,6 +710,7 @@ Deno.serve(async (req) => {
 
     for (const l of leadsCheck || []) {
       if (!canAccessTenant(user, l.tenant_id)) return json({ error: "Forbidden" }, 403)
+      if (!(await checkFeature(l.tenant_id, "pipeline_kanban"))) return json({ error: "Feature pipeline_kanban no activa" }, 403)
     }
 
     const { error } = await supabase
