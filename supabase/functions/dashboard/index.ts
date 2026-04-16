@@ -212,6 +212,142 @@ Deno.serve(async (req) => {
     return json({ ok: true })
   }
 
+  // ─── GET ?action=analytics — métricas del tenant ───
+  if (action === "analytics") {
+    // Resolver tenant
+    let tid: string | null = null
+    const slug = url.searchParams.get("tenant")
+    if (isSuperAdmin(user) && slug) {
+      const { data } = await supabase.from("tenants").select("id, features").eq("slug", slug).maybeSingle()
+      tid = data?.id || null
+    } else if (!isSuperAdmin(user)) {
+      tid = user.tenant_id
+    } else {
+      const { data } = await supabase.from("tenants").select("id").order("created_at", { ascending: true }).limit(1).maybeSingle()
+      tid = data?.id || null
+    }
+    if (!tid) return json({ error: "No tenant" }, 404)
+
+    // Feature gate: analytics
+    const { data: t } = await supabase.from("tenants").select("features").eq("id", tid).maybeSingle()
+    if (!t?.features?.analytics) {
+      return json({ error: "analytics_disabled" }, 403)
+    }
+
+    const now = new Date()
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
+
+    // Total leads
+    const { count: totalLeads } = await supabase
+      .from("leads").select("*", { count: "exact", head: true }).eq("tenant_id", tid)
+
+    // Leads hoy
+    const { count: leadsToday } = await supabase
+      .from("leads").select("*", { count: "exact", head: true })
+      .eq("tenant_id", tid).gte("created_at", today)
+
+    // Leads últimos 7 días
+    const { count: leadsWeek } = await supabase
+      .from("leads").select("*", { count: "exact", head: true })
+      .eq("tenant_id", tid).gte("created_at", weekAgo)
+
+    // Leads últimos 30 días
+    const { count: leadsMonth } = await supabase
+      .from("leads").select("*", { count: "exact", head: true })
+      .eq("tenant_id", tid).gte("created_at", monthAgo)
+
+    // Funnel por status
+    const { data: allLeads } = await supabase
+      .from("leads").select("status, created_at").eq("tenant_id", tid)
+    const funnel: Record<string, number> = {
+      new: 0, contacted: 0, qualified: 0,
+      touring: 0, tour_confirmed: 0, closed_won: 0,
+      closed_lost: 0, disqualified: 0,
+    }
+    for (const l of allLeads || []) {
+      const s = l.status || "new"
+      if (s in funnel) funnel[s]++
+    }
+
+    // Mensajes
+    const { count: totalMessages } = await supabase
+      .from("conversations").select("*", { count: "exact", head: true }).eq("tenant_id", tid)
+    const { count: inboundMessages } = await supabase
+      .from("conversations").select("*", { count: "exact", head: true })
+      .eq("tenant_id", tid).eq("direction", "inbound")
+    const { count: outboundMessages } = await supabase
+      .from("conversations").select("*", { count: "exact", head: true })
+      .eq("tenant_id", tid).eq("direction", "outbound")
+
+    // Speed-to-lead: para cada lead, tiempo entre primer inbound y primer outbound
+    const { data: firstInbounds } = await supabase
+      .from("conversations")
+      .select("lead_id, created_at")
+      .eq("tenant_id", tid).eq("direction", "inbound")
+      .order("created_at", { ascending: true })
+    const { data: firstOutbounds } = await supabase
+      .from("conversations")
+      .select("lead_id, created_at")
+      .eq("tenant_id", tid).eq("direction", "outbound")
+      .order("created_at", { ascending: true })
+
+    const firstIn: Record<string, string> = {}
+    for (const m of firstInbounds || []) {
+      if (!firstIn[m.lead_id]) firstIn[m.lead_id] = m.created_at
+    }
+    const firstOut: Record<string, string> = {}
+    for (const m of firstOutbounds || []) {
+      if (!firstOut[m.lead_id]) firstOut[m.lead_id] = m.created_at
+    }
+    let totalMs = 0, samples = 0
+    for (const lid of Object.keys(firstIn)) {
+      if (firstOut[lid]) {
+        const diff = new Date(firstOut[lid]).getTime() - new Date(firstIn[lid]).getTime()
+        if (diff >= 0) { totalMs += diff; samples++ }
+      }
+    }
+    const avgResponseSeconds = samples > 0 ? Math.round(totalMs / samples / 1000) : null
+
+    // Leads por día (últimos 14 días)
+    const byDay: Record<string, number> = {}
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000)
+      const key = d.toISOString().slice(0, 10)
+      byDay[key] = 0
+    }
+    for (const l of allLeads || []) {
+      const key = (l.created_at || "").slice(0, 10)
+      if (key in byDay) byDay[key]++
+    }
+
+    // Tasas de conversión
+    const qualified = funnel.qualified + funnel.touring + funnel.tour_confirmed + funnel.closed_won
+    const toured = funnel.tour_confirmed + funnel.closed_won
+    const won = funnel.closed_won
+
+    return json({
+      totals: {
+        leads: totalLeads || 0,
+        leads_today: leadsToday || 0,
+        leads_week: leadsWeek || 0,
+        leads_month: leadsMonth || 0,
+        messages: totalMessages || 0,
+        inbound: inboundMessages || 0,
+        outbound: outboundMessages || 0,
+      },
+      funnel,
+      rates: {
+        qualification: totalLeads ? (qualified / totalLeads) : 0,
+        tour: qualified ? (toured / qualified) : 0,
+        close: toured ? (won / toured) : 0,
+      },
+      avg_response_seconds: avgResponseSeconds,
+      leads_by_day: byDay,
+    })
+  }
+
   // ─── POST ?action=toggle-ai — tenant_admin pausa/activa bot para un lead ───
   if (req.method === "POST" && action === "toggle-ai") {
     const { sender_id, ai_active } = await req.json()

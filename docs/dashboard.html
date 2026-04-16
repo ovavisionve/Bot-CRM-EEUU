@@ -384,6 +384,84 @@
 
     .main.has-topnav { display: flex; flex-direction: column; }
 
+    /* Analytics */
+    .analytics { padding: 20px 24px; overflow-y: auto; height: 100%; }
+    .analytics h3 {
+      font-size: 12px; color: #6366f1; text-transform: uppercase;
+      letter-spacing: 0.5px; font-weight: 700;
+      margin-top: 24px; margin-bottom: 12px;
+    }
+    .analytics h3:first-child { margin-top: 0; }
+    .stat-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 12px;
+    }
+    .stat-card {
+      background: #141414; border: 1px solid #2a2a2a;
+      padding: 16px; border-radius: 10px;
+    }
+    .stat-card .label {
+      font-size: 11px; color: #888;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .stat-card .value {
+      font-size: 26px; font-weight: 700; margin-top: 4px; color: #e0e0e0;
+    }
+    .stat-card .sub {
+      font-size: 11px; color: #666; margin-top: 2px;
+    }
+    .funnel { display: flex; flex-direction: column; gap: 6px; }
+    .funnel-row {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .funnel-label {
+      width: 140px; font-size: 12px; color: #aaa; flex-shrink: 0;
+    }
+    .funnel-bar {
+      flex: 1; background: #1a1a1a; border-radius: 4px;
+      height: 24px; position: relative; overflow: hidden;
+    }
+    .funnel-fill {
+      height: 100%; transition: width 0.3s;
+      display: flex; align-items: center; padding: 0 8px;
+      font-size: 11px; font-weight: 600; color: white;
+    }
+    .rate-grid {
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;
+    }
+    .rate-card {
+      background: #141414; border: 1px solid #2a2a2a;
+      padding: 20px; border-radius: 10px; text-align: center;
+    }
+    .rate-card .label {
+      font-size: 11px; color: #888; text-transform: uppercase;
+    }
+    .rate-card .value {
+      font-size: 32px; font-weight: 700; margin: 6px 0;
+      color: #6366f1;
+    }
+    .day-chart {
+      display: flex; align-items: flex-end; gap: 4px;
+      height: 140px; padding: 10px 0;
+      border-bottom: 1px solid #2a2a2a;
+    }
+    .day-bar {
+      flex: 1; background: #6366f1; border-radius: 3px 3px 0 0;
+      min-height: 2px; position: relative;
+      transition: background 0.15s;
+    }
+    .day-bar:hover { background: #a5b4fc; }
+    .day-labels {
+      display: flex; gap: 4px; padding-top: 4px;
+    }
+    .day-label {
+      flex: 1; text-align: center; font-size: 10px; color: #666;
+    }
+    .analytics-locked {
+      padding: 60px; text-align: center; color: #888;
+    }
+    .analytics-locked h2 { color: #fbbf24; margin-bottom: 8px; }
+
     @media (max-width: 768px) {
       .sidebar { width: 100%; }
     }
@@ -418,6 +496,7 @@
       <div class="top-nav">
         <button class="nav-btn active" data-main-view="inbox" onclick="setMainView('inbox')">📥 Inbox</button>
         <button class="nav-btn" data-main-view="pipeline" onclick="setMainView('pipeline')">📊 Pipeline</button>
+        <button class="nav-btn" data-main-view="analytics" onclick="setMainView('analytics')">📈 Analytics</button>
       </div>
       <div id="main-content" style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
         <div class="empty-state">
@@ -590,15 +669,116 @@
       if (currentView !== "leads") return // config se renderiza aparte
       if (currentMainView === "pipeline") {
         renderPipeline()
+      } else if (currentMainView === "analytics") {
+        renderAnalytics()
       } else {
         // inbox
         if (selectedLead) {
           selectLead(selectedLead, /*skipRefresh*/ true)
         } else {
           document.getElementById("main-content").innerHTML =
-            '<div class="empty-state"><div class="icon-box">CRM</div><p>Selecciona un lead o cambia a Pipeline</p></div>'
+            '<div class="empty-state"><div class="icon-box">CRM</div><p>Selecciona un lead o cambia a Pipeline / Analytics</p></div>'
         }
       }
+    }
+
+    async function renderAnalytics() {
+      const mc = document.getElementById("main-content")
+      mc.innerHTML = '<div class="analytics"><div style="color:#666; padding:60px; text-align:center;">Calculando métricas...</div></div>'
+
+      const slug = currentTenant?.slug || ""
+      const res = await fetch(API + "?action=analytics&tenant=" + encodeURIComponent(slug), {
+        headers: { Authorization: "Bearer " + window.token },
+      })
+
+      if (res.status === 403) {
+        mc.innerHTML =
+          '<div class="analytics"><div class="analytics-locked">' +
+            '<h2>📈 Analytics</h2>' +
+            '<p>Esta feature no está activa en tu plan.</p>' +
+            '<p style="margin-top:8px; font-size:13px;">Contactá a OVA VISION para activarla: ovavision.ve@gmail.com</p>' +
+          '</div></div>'
+        return
+      }
+
+      const data = await res.json()
+      if (!data.totals) {
+        mc.innerHTML = '<div class="analytics"><p style="color:#f87171;">Error cargando analytics.</p></div>'
+        return
+      }
+
+      const t = data.totals
+      const f = data.funnel
+      const r = data.rates
+
+      // Speed-to-lead
+      let speed = "-"
+      if (data.avg_response_seconds !== null) {
+        const s = data.avg_response_seconds
+        if (s < 60) speed = s + "s"
+        else if (s < 3600) speed = Math.round(s / 60) + " min"
+        else speed = (s / 3600).toFixed(1) + " h"
+      }
+
+      // Funnel bars
+      const maxFunnel = Math.max(1, ...Object.values(f))
+      const funnelOrder = [
+        ["new", "Nuevos", "#60a5fa"],
+        ["contacted", "Contactados", "#fbbf24"],
+        ["qualified", "Calificados", "#34d399"],
+        ["touring", "Tour propuesto", "#a78bfa"],
+        ["tour_confirmed", "Tour confirmado", "#34d399"],
+        ["closed_won", "Cerrados", "#4ade80"],
+        ["disqualified", "Descalificados", "#f87171"],
+      ]
+      let funnelHTML = '<div class="funnel">'
+      for (const [key, label, color] of funnelOrder) {
+        const n = f[key] || 0
+        const pct = Math.max(3, Math.round(n / maxFunnel * 100))
+        funnelHTML += '<div class="funnel-row">' +
+          '<div class="funnel-label">' + label + '</div>' +
+          '<div class="funnel-bar"><div class="funnel-fill" style="width:' + pct + '%; background:' + color + ';">' + (n > 0 ? n : '') + '</div></div>' +
+          '</div>'
+      }
+      funnelHTML += '</div>'
+
+      // Chart de leads por día
+      const days = Object.keys(data.leads_by_day)
+      const maxDay = Math.max(1, ...Object.values(data.leads_by_day))
+      let barsHTML = '<div class="day-chart">'
+      for (const d of days) {
+        const n = data.leads_by_day[d]
+        const h = Math.max(2, Math.round(n / maxDay * 130))
+        barsHTML += '<div class="day-bar" style="height:' + h + 'px" title="' + d + ': ' + n + ' leads"></div>'
+      }
+      barsHTML += '</div><div class="day-labels">'
+      for (const d of days) {
+        const label = d.slice(5)
+        barsHTML += '<div class="day-label">' + label + '</div>'
+      }
+      barsHTML += '</div>'
+
+      mc.innerHTML = '<div class="analytics">' +
+        '<h3>Resumen</h3>' +
+        '<div class="stat-grid">' +
+          '<div class="stat-card"><div class="label">Leads hoy</div><div class="value">' + t.leads_today + '</div></div>' +
+          '<div class="stat-card"><div class="label">Últimos 7 días</div><div class="value">' + t.leads_week + '</div></div>' +
+          '<div class="stat-card"><div class="label">Últimos 30 días</div><div class="value">' + t.leads_month + '</div></div>' +
+          '<div class="stat-card"><div class="label">Total leads</div><div class="value">' + t.leads + '</div></div>' +
+          '<div class="stat-card"><div class="label">Mensajes total</div><div class="value">' + t.messages + '</div><div class="sub">' + t.inbound + ' in · ' + t.outbound + ' out</div></div>' +
+          '<div class="stat-card"><div class="label">Speed-to-lead</div><div class="value">' + speed + '</div><div class="sub">Tiempo promedio 1ra respuesta</div></div>' +
+        '</div>' +
+        '<h3>Tasas de conversión</h3>' +
+        '<div class="rate-grid">' +
+          '<div class="rate-card"><div class="label">Calificación</div><div class="value">' + Math.round(r.qualification * 100) + '%</div><div class="sub" style="color:#888; font-size:11px;">leads que califican</div></div>' +
+          '<div class="rate-card"><div class="label">Tour agendado</div><div class="value">' + Math.round(r.tour * 100) + '%</div><div class="sub" style="color:#888; font-size:11px;">de calificados</div></div>' +
+          '<div class="rate-card"><div class="label">Cierre</div><div class="value">' + Math.round(r.close * 100) + '%</div><div class="sub" style="color:#888; font-size:11px;">de tours</div></div>' +
+        '</div>' +
+        '<h3>Funnel por status</h3>' +
+        funnelHTML +
+        '<h3>Leads últimos 14 días</h3>' +
+        barsHTML +
+        '</div>'
     }
 
     function renderPipeline() {
