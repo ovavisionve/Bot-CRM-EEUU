@@ -108,6 +108,44 @@ Deno.serve(async (req) => {
           // 2. Guardar mensaje inbound
           await guardarMensaje(senderId, lead.id, tenant.id, mensaje, "inbound")
 
+          // Feature gating: handoff_to_human
+          // Si está activado y el lead usa alguna handoff keyword,
+          // pausar el bot y notificar al admin para que tome el control.
+          if (tenant.features?.handoff_to_human) {
+            const keywords = agentConfig?.handoff_keywords || [
+              "hablar con persona", "hablar con alguien", "speak to agent",
+              "real person", "humano", "human", "talk to a person",
+            ]
+            const mensajeLower = mensaje.toLowerCase()
+            const pide = keywords.some((k) => mensajeLower.includes(k.toLowerCase()))
+            if (pide) {
+              console.log(`[webhook:POST][${tenant.slug}] Handoff solicitado por ${senderId}`)
+              await actualizarLead(senderId, tenant.id, { ai_active: false, status: "contacted" })
+
+              // Mandar un mensaje cordial al lead
+              await enviarMensajesMultiples(
+                senderId,
+                [
+                  tenant.agent_language === "es"
+                    ? "Ok, te conecto con " + tenant.agent_name + " ahora mismo."
+                    : "Ok, let me connect you with " + tenant.agent_name + " right away.",
+                ],
+                tenant.instagram_access_token
+              )
+              // Notificar al admin si la feature está activa
+              if (tenant.features?.admin_email_notifications) {
+                await notificarAdmin({
+                  senderId,
+                  leadName: lead.name || undefined,
+                  mensaje: mensaje,
+                  tipo: "handoff",
+                  tenant,
+                })
+              }
+              continue // no seguir con el flujo IA
+            }
+          }
+
           // 3. Historial
           const historial = await obtenerHistorial(senderId, tenant.id)
 
