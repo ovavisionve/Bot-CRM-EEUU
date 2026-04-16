@@ -1,5 +1,5 @@
 // Notifica al admin cuando hay eventos importantes
-// Envía email via Resend + loggea link de WhatsApp pre-armado
+// Envía email via Gmail (Apps Script webhook) + loggea link de WhatsApp
 
 interface NotificarData {
   senderId: string
@@ -9,11 +9,12 @@ interface NotificarData {
 }
 
 const EVENTOS_IMPORTANTES = ["tour_agendado", "calificado", "handoff", "disqualified"]
+const EMAIL_TOKEN = "ova_email_secret_2026"
 
 export async function notificarAdmin(data: NotificarData) {
   const email = Deno.env.get("ADMIN_EMAIL") || "ovavision.ve@gmail.com"
   const whatsapp = Deno.env.get("ADMIN_WHATSAPP") || "+584245781707"
-  const resendKey = Deno.env.get("RESEND_API_KEY")
+  const gmailWebhook = Deno.env.get("GMAIL_WEBHOOK_URL")
 
   // Link de WhatsApp con el mensaje pre-armado
   const waText = encodeURIComponent(
@@ -28,11 +29,11 @@ export async function notificarAdmin(data: NotificarData) {
     whatsappLink: waLink,
   })
 
-  // Email solo para eventos críticos (no spam al admin con cada DM)
+  // Email solo para eventos críticos
   if (!EVENTOS_IMPORTANTES.includes(data.tipo || "")) return
 
-  if (!resendKey) {
-    console.warn("[notificar] RESEND_API_KEY no configurado - skipping email")
+  if (!gmailWebhook) {
+    console.warn("[notificar] GMAIL_WEBHOOK_URL no configurado - skipping email")
     return
   }
 
@@ -40,14 +41,11 @@ export async function notificarAdmin(data: NotificarData) {
   const html = getEmailHtml(data, waLink)
 
   try {
-    const res = await fetch("https://api.resend.com/emails", {
+    const res = await fetch(gmailWebhook, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${resendKey}`,
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        from: "Bot OVA <onboarding@resend.dev>",
+        token: EMAIL_TOKEN,
         to: email,
         subject,
         html,
@@ -55,10 +53,10 @@ export async function notificarAdmin(data: NotificarData) {
     })
 
     if (!res.ok) {
-      const err = await res.text()
-      console.error("[notificar] Error Resend:", res.status, err)
+      console.error("[notificar] Error Gmail webhook:", res.status, await res.text())
     } else {
-      console.log("[notificar] Email enviado a", email, "-", subject)
+      const result = await res.json()
+      console.log("[notificar] Email enviado a", email, "-", subject, result)
     }
   } catch (err) {
     console.error("[notificar] Error enviando email:", err)
