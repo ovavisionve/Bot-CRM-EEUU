@@ -612,12 +612,20 @@
       } else toast(r.error || "Error", true)
     }
 
-    function renderConfig() {
+    async function renderConfig() {
       const content = document.getElementById("sidebar-content")
       content.innerHTML = '<div style="padding:20px; color:#888; font-size:13px;">Mirá los detalles del panel principal →</div>'
 
       const t = currentTenant || {}
       const f = t.features || {}
+
+      // Pre-cargar agent_voice si la feature está ON
+      if (f.custom_bot_voice) {
+        try {
+          const cfg = await api("?action=agent-config")
+          window._agentVoiceValue = cfg.config?.agent_voice || ""
+        } catch (e) { window._agentVoiceValue = "" }
+      }
       const featureKeys = {
         instagram_bot: "Bot Instagram",
         ai_responses: "Respuestas IA",
@@ -658,10 +666,26 @@
           '</select></div>' +
           '<div class="config-row"><label>Google Sheet ID (propiedades)</label><input id="c-sheet-id" value="' + esc(t.google_sheet_id || "") + '"/></div>' +
           '<button class="btn" onclick="saveConfig()">Guardar cambios</button>' +
+          (f.custom_bot_voice
+            ? '<h3>Voz del bot</h3>' +
+              '<div class="config-row"><label>Descripción de la voz/personalidad del bot (se inyecta en el prompt)</label>' +
+              '<textarea id="c-agent-voice" rows="4" placeholder="Ej: Luis Almario, real estate agent en Miami con 10 años de experiencia, casual, directo, bilingue">' + esc(window._agentVoiceValue || "") + '</textarea></div>' +
+              '<button class="btn" onclick="saveAgentVoice()">Guardar voz</button>'
+            : '') +
           '<h3>Features contratados</h3>' +
           '<p style="font-size:13px; color:#888; margin-bottom:12px;">Estos los gestiona OVA VISION. Si necesitas activar algo, avisanos.</p>' +
           '<div class="feature-list">' + featuresHtml + '</div>' +
         '</div>'
+    }
+
+    window.saveAgentVoice = async function() {
+      const voice = document.getElementById("c-agent-voice").value
+      const r = await api("?action=update-agent-config", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: currentTenant.slug, updates: { agent_voice: voice } }),
+      })
+      if (r.ok) { window._agentVoiceValue = voice; toast("Voz del bot guardada") }
+      else toast(r.error || "Error", true)
     }
 
     async function saveConfig() {

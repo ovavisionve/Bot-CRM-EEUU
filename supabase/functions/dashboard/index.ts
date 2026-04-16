@@ -140,6 +140,45 @@ Deno.serve(async (req) => {
     return json({ ok: true, user: { id: data.user?.id, email: data.user?.email } })
   }
 
+  // ─── POST ?action=update-agent-config — editar voz/estilo del bot ───
+  if (req.method === "POST" && action === "update-agent-config") {
+    const { slug, updates } = await req.json()
+    const { data: t } = await supabase.from("tenants").select("id, features").eq("slug", slug).maybeSingle()
+    if (!t) return json({ error: "Tenant not found" }, 404)
+    if (!canAccessTenant(user, t.id)) return json({ error: "Forbidden" }, 403)
+
+    // custom_bot_voice gatea si el tenant puede editar agent_voice
+    if (!isSuperAdmin(user) && !t.features?.custom_bot_voice) {
+      return json({ error: "Feature custom_bot_voice no está activa" }, 403)
+    }
+
+    const allowed: Record<string, unknown> = {}
+    const whitelist = ["agent_voice", "communication_style", "preferred_language", "auto_switch_language"]
+    for (const k of whitelist) if (k in updates) allowed[k] = updates[k]
+
+    const { error } = await supabase
+      .from("agent_configs")
+      .update({ ...allowed, updated_at: new Date().toISOString() })
+      .eq("tenant_id", t.id)
+    if (error) return json({ error: error.message }, 500)
+    return json({ ok: true })
+  }
+
+  // ─── GET ?action=agent-config — leer config del bot del tenant ───
+  if (action === "agent-config") {
+    const slug = url.searchParams.get("tenant")
+    let tid: string | null = null
+    if (slug && isSuperAdmin(user)) {
+      const { data: t } = await supabase.from("tenants").select("id").eq("slug", slug).maybeSingle()
+      tid = t?.id || null
+    } else {
+      tid = user.tenant_id
+    }
+    if (!tid) return json({ config: null })
+    const { data } = await supabase.from("agent_configs").select("*").eq("tenant_id", tid).maybeSingle()
+    return json({ config: data })
+  }
+
   // ─── POST ?action=update-tenant — super admin o propio tenant_admin ───
   if (req.method === "POST" && action === "update-tenant") {
     const { slug, updates } = await req.json()
