@@ -462,6 +462,20 @@
     }
     .analytics-locked h2 { color: #fbbf24; margin-bottom: 8px; }
 
+    .export-bar {
+      display: flex; gap: 8px; align-items: center;
+      margin-bottom: 12px;
+    }
+    .export-bar .label {
+      font-size: 12px; color: #888; margin-right: 4px;
+    }
+    .export-btn {
+      background: #1a1a1a; color: #a5b4fc; border: 1px solid #2a2a2a;
+      padding: 6px 12px; border-radius: 6px; cursor: pointer;
+      font-size: 12px; font-weight: 500;
+    }
+    .export-btn:hover { border-color: #6366f1; color: #c7d2fe; }
+
     @media (max-width: 768px) {
       .sidebar { width: 100%; }
     }
@@ -759,6 +773,14 @@
       barsHTML += '</div>'
 
       mc.innerHTML = '<div class="analytics">' +
+        '<div class="export-bar">' +
+          '<span class="label">Exportar:</span>' +
+          '<button class="export-btn" onclick="downloadExport(\'analytics\', \'csv\')">📊 Analytics CSV</button>' +
+          '<button class="export-btn" onclick="downloadExport(\'analytics\', \'json\')">📋 Analytics JSON</button>' +
+          '<button class="export-btn" onclick="downloadExport(\'leads\', \'csv\')">📇 Leads CSV</button>' +
+          '<button class="export-btn" onclick="downloadExport(\'leads\', \'json\')">📇 Leads JSON</button>' +
+          '<button class="export-btn" onclick="downloadExport(\'conversations\', \'csv\')">💬 Conversaciones CSV</button>' +
+        '</div>' +
         '<h3>Resumen</h3>' +
         '<div class="stat-grid">' +
           '<div class="stat-card"><div class="label">Leads hoy</div><div class="value">' + t.leads_today + '</div></div>' +
@@ -881,6 +903,33 @@
         headers: { ...(init.headers || {}), Authorization: "Bearer " + window.token },
       })
       return res.json()
+    }
+
+    // Helper para descargar un export (llama al endpoint con Auth y dispara download)
+    window.downloadExport = async function(type, format) {
+      const slug = currentTenant?.slug || ""
+      const qs = new URLSearchParams({ action: "export", type, format, tenant: slug })
+      const res = await fetch(API + "?" + qs.toString(), {
+        headers: { Authorization: "Bearer " + window.token },
+      })
+      if (!res.ok) {
+        toast("Error al exportar: " + res.status, true)
+        return
+      }
+      const blob = await res.blob()
+      // Extraer filename del header Content-Disposition
+      const cd = res.headers.get("Content-Disposition") || ""
+      const match = cd.match(/filename="?([^"]+)"?/)
+      const filename = match ? match[1] : (type + "_export." + format)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      toast("Descargado: " + filename)
     }
 
     async function loadLeads() {
@@ -1013,7 +1062,10 @@
 
       main.innerHTML =
         '<div class="main-header">' +
-          '<h2>' + esc(name) + '<button class="edit-btn" onclick="openEditModal(\'' + lead.sender_id + '\')">Editar</button></h2>' +
+          '<h2>' + esc(name) +
+            '<button class="edit-btn" onclick="openEditModal(\'' + lead.sender_id + '\')">Editar</button>' +
+            '<button class="edit-btn" onclick="downloadChat(\'' + lead.sender_id + '\')" title="Descargar conversación">⬇ CSV</button>' +
+          '</h2>' +
           aiBadge +
         '</div>' +
         detailHTML +
@@ -1036,6 +1088,25 @@
         })
         input.focus()
       }
+    }
+
+    window.downloadChat = async function(senderId) {
+      const slug = currentTenant?.slug || ""
+      const qs = new URLSearchParams({ action: "export", type: "conversations", format: "csv", tenant: slug, lead: senderId })
+      const res = await fetch(API + "?" + qs.toString(), {
+        headers: { Authorization: "Bearer " + window.token },
+      })
+      if (!res.ok) { toast("Error exportando", true); return }
+      const blob = await res.blob()
+      const cd = res.headers.get("Content-Disposition") || ""
+      const match = cd.match(/filename="?([^"]+)"?/)
+      const filename = match ? match[1] : "conversation.csv"
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url; a.download = filename
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      toast("Descargado")
     }
 
     window.openEditModal = function(senderId) {
