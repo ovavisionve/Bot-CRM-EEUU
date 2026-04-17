@@ -13,6 +13,8 @@ interface Propiedad {
   promociones: string
   notas: string
   disponible: string
+  foto_url: string
+  video_url: string
 }
 
 // Cache por tenant (sheetId) para no pedir el Sheet en cada mensaje
@@ -43,6 +45,8 @@ function parsearCSV(csv: string): Propiedad[] {
       promociones: campos[8],
       notas: campos[9],
       disponible: campos[10],
+      foto_url: campos[11] || "",
+      video_url: campos[12] || "",
     }
 
     // Solo incluir propiedades marcadas como disponibles
