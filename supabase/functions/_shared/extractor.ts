@@ -29,7 +29,8 @@ export async function extraerEstadoLead(
   historial: HistorialMsg[],
   mensajeNuevo: string,
   estadoActual: any,
-  _tenant?: any // para futuro: prompt customizado por tenant
+  _tenant?: any,
+  propertyNames?: string[]
 ): Promise<LeadEstado> {
   const apiKey = Deno.env.get("OPENROUTER_API_KEY")
   if (!apiKey) return {}
@@ -64,17 +65,8 @@ CONVERSACIÓN:
 ${conversacion}
 Lead (ÚLTIMO MENSAJE): ${mensajeNuevo}
 
-PROPIEDADES DISPONIBLES (usá estos nombres exactos para selected_property_name):
-- Coral Terrace 2BR/2BA
-- Coral Terrace West 1BR/1BA
-- Flagami Budget 2BR/1BA
-- Alexan Ludlam Premium 2BR/2BA
-- Westchester Studio
-- Bird Road 3BR/2BA
-- Doral Modern 1BR/1BA
-- Little Havana Renovated 2BR/1BA
-- Kendall Family 3BR/2BA
-- Brickell Tower 1BR/1BA
+PROPIEDADES DISPONIBLES (usá estos nombres EXACTOS para selected_property_name):
+${(propertyNames && propertyNames.length > 0) ? propertyNames.map(n => "- " + n).join("\n") : "- (no hay propiedades cargadas)"}
 
 REGLAS:
 - Si el lead dice "Coral Terrace" o "coral terrace" → selected_property_name = "Coral Terrace 2BR/2BA"

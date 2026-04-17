@@ -239,7 +239,16 @@ Deno.serve(async (req) => {
           // 4. Extraer estado estructurado (sólo si el feature está activo)
           let nuevoEstado: Record<string, any> = {}
           if (tenant.features?.ai_memory_extraction) {
-            nuevoEstado = await extraerEstadoLead(historial, mensaje, lead, tenant)
+            // Obtener nombres de propiedades para el extractor
+            let propNames: string[] = []
+            try {
+              if (tenant.features?.google_sheets_properties && tenant.google_sheet_id) {
+                const { obtenerPropiedades } = await import("../_shared/sheets.ts")
+                const props = await obtenerPropiedades(tenant.google_sheet_id)
+                propNames = props.map((p: any) => p.nombre).filter(Boolean)
+              }
+            } catch (_) {}
+            nuevoEstado = await extraerEstadoLead(historial, mensaje, lead, tenant, propNames)
             if (Object.keys(nuevoEstado).length > 0) {
               await actualizarLead(senderId, tenant.id, nuevoEstado)
             }
