@@ -29,7 +29,8 @@ export async function extraerEstadoLead(
   historial: HistorialMsg[],
   mensajeNuevo: string,
   estadoActual: any,
-  _tenant?: any // para futuro: prompt customizado por tenant
+  _tenant?: any,
+  propertyNames?: string[]
 ): Promise<LeadEstado> {
   const apiKey = Deno.env.get("OPENROUTER_API_KEY")
   if (!apiKey) return {}
@@ -38,71 +39,74 @@ export async function extraerEstadoLead(
     .map((m) => `${m.direction === "inbound" ? "Lead" : "Agent"}: ${m.message_text}`)
     .join("\n")
 
-  const prompt = `Extract structured data from this real estate conversation. Be AGGRESSIVE about detecting confirmations in the LATEST message.
+  const prompt = `Sos un extractor de datos. Leé esta conversación de real estate y extraé los datos del lead a JSON.
 
-CURRENT KNOWN STATE:
-${JSON.stringify({
-    name: estadoActual.name,
-    partner_name: estadoActual.partner_name,
-    move_in_date: estadoActual.move_in_date,
-    occupants: estadoActual.occupants,
-    pets: estadoActual.pets,
-    credit_score: estadoActual.credit_score,
-    preferred_unit: estadoActual.preferred_unit,
-    selected_property_name: estadoActual.selected_property_name,
-    tour_date: estadoActual.tour_date,
-    tour_confirmed: estadoActual.tour_confirmed,
-    status: estadoActual.status,
-  }, null, 2)}
+DATOS ACTUALES DEL LEAD (preservalos si el mensaje nuevo no los cambia):
+${JSON.stringify(
+    Object.fromEntries(
+      Object.entries({
+        name: estadoActual.name,
+        partner_name: estadoActual.partner_name,
+        move_in_date: estadoActual.move_in_date,
+        occupants: estadoActual.occupants,
+        pets: estadoActual.pets,
+        credit_score: estadoActual.credit_score,
+        preferred_unit: estadoActual.preferred_unit,
+        selected_property_name: estadoActual.selected_property_name,
+        tour_date: estadoActual.tour_date,
+        tour_confirmed: estadoActual.tour_confirmed,
+        status: estadoActual.status,
+      }).filter(([_, v]) => v !== null && v !== undefined)
+    ),
+    null, 2
+  )}
 
-FULL CONVERSATION (most recent at bottom):
+CONVERSACIÓN:
 ${conversacion}
-Lead (LATEST): ${mensajeNuevo}
+Lead (ÚLTIMO MENSAJE): ${mensajeNuevo}
 
-EXTRACTION RULES (CRITICAL):
-- The LATEST message is the MOST IMPORTANT. Read it carefully.
-- If the lead replies with just a property name like "Coral Terrace", "Flagami", "Bird Road" → that IS the selected_property_name. Use the FULL property name (e.g. "Coral Terrace 2BR/2BA", "Flagami Budget 2BR/1BA"). ALWAYS set this field when the lead mentions a property by name, even partially.
-- If the lead has said the same property name multiple times, they are VERY clearly choosing it. Set selected_property_name AND advance status to at least "touring".
-- "Confirm X", "at X", "the X one", "X is better", "quiero X", "me interesa X" → selected property
-- If lead mentions a specific day/time + has selected a property → tour_date = that day/time
-- Names like "Valeria Rodrigues", "Luis Ilarraza" → name (and partner_name if two names given)
-- "solo" / "alone" → occupants = "solo"; "con pareja" / "with partner" → "pareja"
-- "si", "yes", "perfecto" as answer to credit 620+ question → credit_qualified; if asked for number, infer credit_score or leave null
-- Answer to "1BR/2BR/studio?" → extract to preferred_unit (e.g. "2BR/2BA")
-- Don't downgrade fields: if selected_property_name was set, don't null it unless user explicitly changes choice
-- If the lead is frustrated with the bot repeating questions, extract data from history aggressively and set status forward
-- IMPORTANT: preserve previously known data if the latest message doesn't change it
+PROPIEDADES DISPONIBLES (usá estos nombres EXACTOS para selected_property_name):
+${(propertyNames && propertyNames.length > 0) ? propertyNames.map(n => "- " + n).join("\n") : "- (no hay propiedades cargadas)"}
 
-Return JSON (use null ONLY if truly unknown, not if previously known):
+REGLAS:
+- Si el lead dice "Coral Terrace" o "coral terrace" → selected_property_name = "Coral Terrace 2BR/2BA"
+- Si dice "Flagami" → "Flagami Budget 2BR/1BA"
+- Si dice un día ("viernes", "Friday", "sabado") → tour_date = ese día
+- Si dice un nombre ("Carlos Lopez") → name = "Carlos Lopez"
+- Si menciona pareja ("mi novia Maria") → partner_name = "Maria"
+- Si dice "solo" / "alone" → occupants = "solo"
+- Si dice "con pareja" / "with partner" → occupants = "pareja"
+- Si dice un número de crédito → credit_score = ese número
+- Si responde "sí" a pregunta de crédito 620 → credit_score = 620
+- Si dice "2 cuartos" / "2BR" → preferred_unit = "2BR/2BA"
+- PRESERVAR datos previos: si un campo ya tiene valor y el mensaje nuevo no lo cambia, mantené el valor anterior
+- NUNCA borrar selected_property_name si ya estaba puesto (salvo que elija otra)
+
+STATUS:
+- new → sin info
+- contacted → ya saludó
+- qualified → crédito >= 620 Y sabe ocupantes
+- touring → eligió propiedad O propuso día de tour
+- tour_confirmed → tiene propiedad + día + nombre
+- disqualified → crédito < 620
+
+Devolvé SOLO JSON válido, sin markdown, sin explicación:
 {
-  "name": "Lead full name",
-  "partner_name": "Partner name",
-  "move_in_date": "when moving",
-  "occupants": "solo | pareja | familia",
-  "pets": "none | normal | ESA",
-  "credit_score": number,
-  "preferred_unit": "1BR/1BA | 2BR/2BA | 3BR/2BA | studio",
-  "selected_property_name": "EXACT property name lead chose",
-  "tour_date": "Friday 5pm / 2026-04-20 / etc",
-  "tour_confirmed": true/false,
-  "language": "en | es",
-  "status": "new | contacted | qualified | disqualified | touring | tour_confirmed | closed_won | closed_lost",
-  "budget_max": number,
-  "notes": "brief notes <200 chars",
-  "sentiment": "positive | neutral | negative | frustrated (based on the lead's tone in the LATEST message)",
-  "close_probability": "0-100 integer. How likely this lead is to sign a lease based on ALL data: credit, budget, engagement, timeline, interest shown, questions asked. 80+ = hot lead, 50-79 = warm, 20-49 = cold, <20 = unlikely"
-}
-
-STATUS RULES:
-- new: no info yet
-- contacted: greeted
-- qualified: credit >= 620 AND occupants known
-- disqualified: credit < 620
-- touring: tour proposed but not fully confirmed
-- tour_confirmed: property + date + names all confirmed
-- closed_won/lost: explicit signed/rejected
-
-Return ONLY valid JSON, no markdown.`
+  "name": string o null,
+  "partner_name": string o null,
+  "move_in_date": string o null,
+  "occupants": "solo" | "pareja" | "familia" | null,
+  "pets": "none" | "normal" | "ESA" | null,
+  "credit_score": number o null,
+  "preferred_unit": string o null,
+  "selected_property_name": string EXACTO de la lista o null,
+  "tour_date": string o null,
+  "tour_confirmed": boolean,
+  "language": "en" | "es",
+  "status": string,
+  "sentiment": "positive" | "neutral" | "negative" | "frustrated",
+  "close_probability": number 0-100
+}`
 
   try {
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -112,7 +116,7 @@ Return ONLY valid JSON, no markdown.`
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "anthropic/claude-sonnet-4",
         max_tokens: 400,
         messages: [{ role: "user", content: prompt }],
         response_format: { type: "json_object" },
