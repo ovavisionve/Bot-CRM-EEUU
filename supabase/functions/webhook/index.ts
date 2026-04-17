@@ -16,6 +16,7 @@ import { getTenantByInstagramId, getAgentConfig } from "../_shared/tenant.ts"
 import { calculateScore } from "../_shared/scoring.ts"
 import { fireWebhooks } from "../_shared/outgoing.ts"
 import { sendPushToTenant } from "../_shared/push.ts"
+import { processAttachments } from "../_shared/attachments.ts"
 
 Deno.serve(async (req) => {
   const url = new URL(req.url)
@@ -90,11 +91,26 @@ Deno.serve(async (req) => {
 
         for (const event of eventos) {
           const senderId = event.sender?.id
-          const mensaje = event.message?.text || ""
+          let mensaje = event.message?.text || ""
+          let attachmentType: string | null = null
+          let attachmentUrl: string | null = null
+
+          // Procesar attachments (voice notes, imagenes)
+          const atts = event.message?.attachments || []
+          if (atts.length > 0 && !mensaje) {
+            try {
+              const results = await processAttachments(atts, tenant.instagram_access_token, "Real estate conversation")
+              if (results.length > 0) {
+                mensaje = results.map((r: any) => r.text).join(" ")
+                attachmentType = results[0].type
+                attachmentUrl = results[0].originalUrl
+              }
+            } catch (err) { console.error("[webhook:POST] Attachment error:", err) }
+          }
 
           if (!senderId || !mensaje) continue
           if (event.message?.is_echo) continue
-          if (senderId === "12334") continue // evento de prueba de Meta
+          if (senderId === "12334") continue
 
           console.log(`[webhook:POST][${tenant.slug}] DM de ${senderId}: ${mensaje}`)
 
@@ -146,7 +162,9 @@ Deno.serve(async (req) => {
           }
 
           // 2. Guardar mensaje inbound
-          await guardarMensaje(senderId, lead.id, tenant.id, mensaje, "inbound")
+          await guardarMensaje(senderId, lead.id, tenant.id, mensaje, "inbound", {
+            channel: "instagram",
+          })
 
           // Feature gating: handoff_to_human
           // Si está activado y el lead usa alguna handoff keyword,
