@@ -238,7 +238,7 @@ export async function generarRespuesta(
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "anthropic/claude-3.5-haiku",
+        model: "deepseek/deepseek-chat-v3-0324",
         max_tokens: 512,
         messages,
       }),

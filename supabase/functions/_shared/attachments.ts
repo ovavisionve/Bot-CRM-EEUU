@@ -100,7 +100,7 @@ async function analyzeImage(url: string, context?: string): Promise<string> {
         "Authorization": "Bearer " + apiKey,
       },
       body: JSON.stringify({
-        model: "anthropic/claude-3.5-haiku",
+        model: "deepseek/deepseek-chat-v3-0324",
         max_tokens: 200,
         messages: [{
           role: "user",
