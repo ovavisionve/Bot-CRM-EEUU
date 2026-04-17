@@ -7,6 +7,8 @@
 //   GET  /public-api/health     (sin auth)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { checkRateLimit } from "../_shared/ratelimit.ts"
+import { logError } from "../_shared/errorlog.ts"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -59,6 +61,12 @@ Deno.serve(async (req) => {
 
   const auth = await authenticate(req)
   if (!auth) return json({ error: "Invalid or missing API token" }, 401)
+
+  // Rate limiting: 200 requests per 15 min per token
+  const { allowed, remaining } = await checkRateLimit("token:" + auth.tenant_id, 200, 15)
+  if (!allowed) {
+    return json({ error: "Rate limit exceeded. Try again in a few minutes." }, 429)
+  }
 
   const supabase = getClient()
 

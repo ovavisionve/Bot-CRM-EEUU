@@ -62,6 +62,50 @@ Deno.serve(async (req) => {
 
   const supabase = getClient()
 
+  // ═══════════════ FASE 14: AUDIT + SYSTEM HEALTH ═══════════════
+
+  if (action === "audit-log") {
+    if (!isSuperAdmin(user) && !user.tenant_id) return json({ logs: [] })
+    const tid = isSuperAdmin(user) && url.searchParams.get("tenant")
+      ? (await supabase.from("tenants").select("id").eq("slug", url.searchParams.get("tenant")!).maybeSingle()).data?.id
+      : user.tenant_id
+    let q = supabase.from("audit_logs").select("*").order("created_at", { ascending: false }).limit(100)
+    if (tid) q = q.eq("tenant_id", tid)
+    const { data } = await q
+    return json({ logs: data || [] })
+  }
+
+  if (action === "error-log") {
+    if (!isSuperAdmin(user)) return json({ error: "Forbidden" }, 403)
+    const { data } = await supabase.from("error_logs").select("*")
+      .order("created_at", { ascending: false }).limit(50)
+    return json({ errors: data || [] })
+  }
+
+  if (action === "system-health") {
+    if (!isSuperAdmin(user)) return json({ error: "Forbidden" }, 403)
+    const now = new Date()
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    const { count: totalTenants } = await supabase.from("tenants").select("*", { count: "exact", head: true })
+    const { count: activeTenants } = await supabase.from("tenants").select("*", { count: "exact", head: true }).eq("status", "active")
+    const { count: totalLeads } = await supabase.from("leads").select("*", { count: "exact", head: true })
+    const { count: leadsToday } = await supabase.from("leads").select("*", { count: "exact", head: true }).gte("created_at", today)
+    const { count: leadsWeek } = await supabase.from("leads").select("*", { count: "exact", head: true }).gte("created_at", weekAgo)
+    const { count: totalMsgs } = await supabase.from("conversations").select("*", { count: "exact", head: true })
+    const { count: msgsToday } = await supabase.from("conversations").select("*", { count: "exact", head: true }).gte("created_at", today)
+    const { count: errorsToday } = await supabase.from("error_logs").select("*", { count: "exact", head: true }).gte("created_at", today)
+    const { count: errorsWeek } = await supabase.from("error_logs").select("*", { count: "exact", head: true }).gte("created_at", weekAgo)
+    return json({
+      status: "operational",
+      tenants: { total: totalTenants || 0, active: activeTenants || 0 },
+      leads: { total: totalLeads || 0, today: leadsToday || 0, week: leadsWeek || 0 },
+      messages: { total: totalMsgs || 0, today: msgsToday || 0 },
+      errors: { today: errorsToday || 0, week: errorsWeek || 0 },
+      checked_at: now.toISOString(),
+    })
+  }
+
   // ─── GET /me — perfil del usuario ───
   if (action === "me") {
     let tenantData = null
