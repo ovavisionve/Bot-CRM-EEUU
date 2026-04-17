@@ -2540,6 +2540,15 @@
       if (lead.occupants) detailHTML += '<div class="detail-item"><strong>Ocupantes:</strong> ' + lead.occupants + '</div>'
       if (lead.selected_property_name) detailHTML += '<div class="detail-item"><strong>Propiedad:</strong> ' + esc(lead.selected_property_name) + '</div>'
       if (lead.tour_date) detailHTML += '<div class="detail-item"><strong>Tour:</strong> ' + esc(lead.tour_date) + '</div>'
+      if (lead.sentiment) {
+        const sentEmoji = { positive:"😊", neutral:"😐", negative:"😞", frustrated:"😤" }
+        detailHTML += '<div class="detail-item"><strong>Sentimiento:</strong> ' + (sentEmoji[lead.sentiment]||"") + ' ' + lead.sentiment + '</div>'
+      }
+      if (lead.close_probability != null) {
+        const cpColor = lead.close_probability >= 70 ? "var(--success)" : lead.close_probability >= 40 ? "var(--warn)" : "var(--danger)"
+        detailHTML += '<div class="detail-item"><strong>Prob. cierre:</strong> <span style="color:' + cpColor + ';font-weight:700;">' + lead.close_probability + '%</span></div>'
+      }
+      if (lead.score) detailHTML += '<div class="detail-item"><strong>Score:</strong> ' + lead.score + '/100</div>'
       detailHTML += '<div class="detail-item"><strong>Mensajes:</strong> ' + msgs.length + '</div>'
       detailHTML += '</div>'
 

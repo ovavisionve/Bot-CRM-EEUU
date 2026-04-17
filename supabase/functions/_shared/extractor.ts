@@ -21,6 +21,8 @@ interface LeadEstado {
   status?: string | null
   budget_max?: number | null
   notes?: string | null
+  sentiment?: string | null
+  close_probability?: number | null
 }
 
 export async function extraerEstadoLead(
@@ -79,13 +81,15 @@ Return JSON (use null ONLY if truly unknown, not if previously known):
   "pets": "none | normal | ESA",
   "credit_score": number,
   "preferred_unit": "1BR/1BA | 2BR/2BA | 3BR/2BA | studio",
-  "selected_property_name": "EXACT property name lead chose (e.g. 'Flagami Budget 2BR/1BA', 'Coral Terrace 2BR/2BA'). Match the property name in the AVAILABLE PROPERTIES list exactly.",
+  "selected_property_name": "EXACT property name lead chose",
   "tour_date": "Friday 5pm / 2026-04-20 / etc",
   "tour_confirmed": true/false,
   "language": "en | es",
   "status": "new | contacted | qualified | disqualified | touring | tour_confirmed | closed_won | closed_lost",
   "budget_max": number,
-  "notes": "brief notes <200 chars"
+  "notes": "brief notes <200 chars",
+  "sentiment": "positive | neutral | negative | frustrated (based on the lead's tone in the LATEST message)",
+  "close_probability": "0-100 integer. How likely this lead is to sign a lease based on ALL data: credit, budget, engagement, timeline, interest shown, questions asked. 80+ = hot lead, 50-79 = warm, 20-49 = cold, <20 = unlikely"
 }
 
 STATUS RULES:
