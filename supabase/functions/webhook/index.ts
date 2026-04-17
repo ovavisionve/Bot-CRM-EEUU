@@ -484,15 +484,20 @@ function parseTourDate(text: string | null): string {
   }
 
   // Extraer hora si la mencionan ("5pm", "3pm", "a las 2")
+  // IMPORTANTE: asumir hora local de Miami (EDT = UTC-4 en verano, EST = UTC-5 en invierno)
+  // Abril-Octubre = EDT (UTC-4), Noviembre-Marzo = EST (UTC-5)
+  const month = date.getMonth() // 0-indexed
+  const tzOffset = (month >= 2 && month <= 10) ? 4 : 5 // EDT abril-oct, EST nov-mar
+
   const hourMatch = lower.match(/(\d{1,2})\s*(pm|am|p\.m\.|a\.m\.)?/)
   if (hourMatch) {
     let hour = parseInt(hourMatch[1])
     const isPM = hourMatch[2]?.startsWith("p")
     if (isPM && hour < 12) hour += 12
     if (!hourMatch[2] && hour < 8) hour += 12 // asumir PM si dice "3" sin am/pm
-    date.setHours(hour, 0, 0, 0)
+    date.setUTCHours(hour + tzOffset, 0, 0, 0) // convertir hora local a UTC
   } else {
-    date.setHours(14, 0, 0, 0) // default 2pm si no dice hora
+    date.setUTCHours(14 + tzOffset, 0, 0, 0) // default 2pm local
   }
 
   return date.toISOString()
