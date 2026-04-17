@@ -61,7 +61,8 @@ Lead (LATEST): ${mensajeNuevo}
 
 EXTRACTION RULES (CRITICAL):
 - The LATEST message is the MOST IMPORTANT. Read it carefully.
-- If the lead replies with just a property name like "Coral Terrace", "Flagami", "Bird Road" → that's selected_property_name. Match the exact property name from the conversation history (the one the agent offered).
+- If the lead replies with just a property name like "Coral Terrace", "Flagami", "Bird Road" → that IS the selected_property_name. Use the FULL property name (e.g. "Coral Terrace 2BR/2BA", "Flagami Budget 2BR/1BA"). ALWAYS set this field when the lead mentions a property by name, even partially.
+- If the lead has said the same property name multiple times, they are VERY clearly choosing it. Set selected_property_name AND advance status to at least "touring".
 - "Confirm X", "at X", "the X one", "X is better", "quiero X", "me interesa X" → selected property
 - If lead mentions a specific day/time + has selected a property → tour_date = that day/time
 - Names like "Valeria Rodrigues", "Luis Ilarraza" → name (and partner_name if two names given)

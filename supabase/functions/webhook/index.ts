@@ -207,6 +207,35 @@ Deno.serve(async (req) => {
           // 3. Historial
           const historial = await obtenerHistorial(senderId, tenant.id)
 
+          // DETECCIÓN DE LOOP: si los últimos 3 outbound son casi iguales, pausar bot
+          const recentOutbound = historial
+            .filter((m: any) => m.direction === "outbound")
+            .slice(-4)
+            .map((m: any) => m.message_text.substring(0, 50).toLowerCase())
+          if (recentOutbound.length >= 3) {
+            const last3 = recentOutbound.slice(-3)
+            const allSimilar = last3.every((t: string) =>
+              last3[0].includes(t.substring(0, 20)) || t.includes(last3[0].substring(0, 20))
+            )
+            if (allSimilar) {
+              console.warn(`[webhook:POST][${tenant.slug}] LOOP DETECTADO para ${senderId}, pausando bot`)
+              await actualizarLead(senderId, tenant.id, { ai_active: false })
+              const loopMsg = (lead.language === "es")
+                ? `Disculpa la confusión. Te paso con ${tenant.agent_name} directamente. Escríbeme al ${(tenant.agent_phone || "").replace(/[^0-9]/g, "")} por WhatsApp.`
+                : `Sorry for the confusion. Let me connect you with ${tenant.agent_name} directly. Text me at ${(tenant.agent_phone || "").replace(/[^0-9]/g, "")} on WhatsApp.`
+              await enviarMensajesMultiples(senderId, [loopMsg], tenant.instagram_access_token)
+              await guardarMensaje(senderId, lead.id, tenant.id, loopMsg, "outbound", { sent_by: "system" })
+              if (tenant.features?.admin_email_notifications) {
+                await notificarAdmin({
+                  senderId, leadName: lead.name || undefined,
+                  mensaje: "LOOP detectado — bot pausado automáticamente",
+                  tipo: "tour_agendado", tenant,
+                })
+              }
+              continue
+            }
+          }
+
           // 4. Extraer estado estructurado (sólo si el feature está activo)
           let nuevoEstado: Record<string, any> = {}
           if (tenant.features?.ai_memory_extraction) {

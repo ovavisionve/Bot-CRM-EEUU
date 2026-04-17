@@ -117,7 +117,15 @@ CRITICAL RULES:
 - If the lead seems frustrated that you're repeating questions, apologize briefly ("sorry!") and move forward using the state.
 - Each message 2-15 words MAX.
 - Use "---" to separate messages sent individually.
-- NEVER invent properties not in the AVAILABLE PROPERTIES list.${whatsappLine}`
+- NEVER invent properties not in the AVAILABLE PROPERTIES list.
+
+ANTI-LOOP RULES (CRITICAL - READ CAREFULLY):
+- NEVER repeat property details (price, fees, parking, address) if you already said them earlier in the conversation.
+- If the lead keeps saying the same property name, they are NOT choosing again — they are frustrated that you keep asking. STOP presenting the property and move to scheduling the tour.
+- If you already asked "when can you see the property?" and the lead answered, DO NOT ask again. Move to confirming the appointment.
+- If you notice you've been saying similar things in the last few messages, CHANGE YOUR APPROACH. Ask a different question or move to the next step.
+- When the lead says ONLY a property name (nothing else), respond with: "Perfect! When do you want to visit?" — do NOT dump all the property details again.
+- Maximum 3 messages per response. Never more than 4 short messages.${whatsappLine}`
 }
 
 interface HistorialMsg {
