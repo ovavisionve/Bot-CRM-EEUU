@@ -15,6 +15,7 @@ import { extraerEstadoLead } from "../_shared/extractor.ts"
 import { getTenantByInstagramId, getAgentConfig } from "../_shared/tenant.ts"
 import { calculateScore } from "../_shared/scoring.ts"
 import { fireWebhooks } from "../_shared/outgoing.ts"
+import { sendPushToTenant } from "../_shared/push.ts"
 
 Deno.serve(async (req) => {
   const url = new URL(req.url)
@@ -287,6 +288,14 @@ Deno.serve(async (req) => {
               console.error("[webhook:POST] Error creando tour:", err)
             }
           }
+
+          // Push notification al agente (fire-and-forget)
+          sendPushToTenant(tenant.id, {
+            title: "Nuevo DM de " + (leadActualizado.name || senderId),
+            body: mensaje.substring(0, 100),
+            url: "/Bot-CRM-EEUU/dashboard.html?tenant=" + tenant.slug,
+            tag: "dm-" + senderId,
+          }).catch(() => {})
 
           // Outgoing webhooks (fire-and-forget)
           const prevStatus = lead.status
