@@ -3,6 +3,68 @@
 
 const IG_API_URL = "https://graph.instagram.com/v22.0/me/messages"
 
+// Enviar imagen por Instagram DM
+export async function enviarImagen(
+  recipientId: string,
+  imageUrl: string,
+  accessToken?: string | null
+) {
+  const token = accessToken || Deno.env.get("INSTAGRAM_ACCESS_TOKEN")
+  if (!token) { console.error("[instagram] No hay access_token"); return }
+
+  const res = await fetch(IG_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      recipient: { id: recipientId },
+      message: {
+        attachment: { type: "image", payload: { url: imageUrl } },
+      },
+    }),
+  })
+
+  if (!res.ok) {
+    const error = await res.text()
+    console.error("[instagram] Error enviando imagen:", res.status, error)
+    return
+  }
+  console.log("[instagram] Imagen enviada a", recipientId)
+}
+
+// Enviar video por Instagram DM
+export async function enviarVideo(
+  recipientId: string,
+  videoUrl: string,
+  accessToken?: string | null
+) {
+  const token = accessToken || Deno.env.get("INSTAGRAM_ACCESS_TOKEN")
+  if (!token) { console.error("[instagram] No hay access_token"); return }
+
+  const res = await fetch(IG_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      recipient: { id: recipientId },
+      message: {
+        attachment: { type: "video", payload: { url: videoUrl } },
+      },
+    }),
+  })
+
+  if (!res.ok) {
+    const error = await res.text()
+    console.error("[instagram] Error enviando video:", res.status, error)
+    return
+  }
+  console.log("[instagram] Video enviado a", recipientId)
+}
+
 export async function enviarMensaje(
   recipientId: string,
   texto: string,

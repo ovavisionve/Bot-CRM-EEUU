@@ -3,7 +3,7 @@
 // que aparece en recipient.id (o entry.id) de cada evento.
 
 import { generarRespuesta } from "../_shared/respuestas.ts"
-import { enviarMensajesMultiples } from "../_shared/instagram.ts"
+import { enviarMensajesMultiples, enviarImagen, enviarVideo } from "../_shared/instagram.ts"
 import {
   obtenerOCrearLead,
   guardarMensaje,
@@ -276,6 +276,30 @@ Deno.serve(async (req) => {
             tenant.instagram_access_token
           )
 
+          // 6b. Si el lead pidió fotos/video, enviar de la propiedad seleccionada
+          const pideFotos = /foto|fotos|image|images|picture|pictures|muestrame|muéstrame|show me|envíame|enviame|enseñame|enséñame/.test(mensaje.toLowerCase())
+          const pideVideo = /video|videos|tour virtual/.test(mensaje.toLowerCase())
+          if ((pideFotos || pideVideo) && (leadActualizado.selected_property_name || nuevoEstado.selected_property_name)) {
+            try {
+              let props: any[] = []
+              if (tenant.features?.google_sheets_properties && tenant.google_sheet_id) {
+                props = await obtenerPropiedades(tenant.google_sheet_id)
+              }
+              const propName = (nuevoEstado.selected_property_name || leadActualizado.selected_property_name || "").toLowerCase()
+              const elegida = props.find((p: any) => propName.includes(p.nombre.toLowerCase().split(" ")[0]))
+              if (pideFotos && elegida?.foto_url) {
+                await enviarImagen(senderId, elegida.foto_url, tenant.instagram_access_token)
+                await guardarMensaje(senderId, lead.id, tenant.id, "[Foto enviada: " + elegida.nombre + "]", "outbound", { sent_by: "bot" })
+              }
+              if (pideVideo && elegida?.video_url) {
+                await enviarVideo(senderId, elegida.video_url, tenant.instagram_access_token)
+                await guardarMensaje(senderId, lead.id, tenant.id, "[Video enviado: " + elegida.nombre + "]", "outbound", { sent_by: "bot" })
+              }
+            } catch (err) {
+              console.error("[webhook] Error enviando media:", err)
+            }
+          }
+
           // 7. Guardar respuestas outbound
           for (const resp of respuestas) {
             await guardarMensaje(senderId, lead.id, tenant.id, resp, "outbound")
@@ -307,10 +331,8 @@ Deno.serve(async (req) => {
                 Deno.env.get("SUPABASE_URL")!,
                 Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
               )
-              // Parsear la fecha del tour (texto libre) - si falla, usar fecha actual + 3 días
-              let scheduled = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString()
-              const parsed = Date.parse(leadActualizado.tour_date)
-              if (!isNaN(parsed)) scheduled = new Date(parsed).toISOString()
+              // Parsear la fecha del tour (texto libre: "sábado", "Friday 5pm", etc.)
+              let scheduled = parseTourDate(leadActualizado.tour_date)
 
               const { data: newTour } = await sb.from("tours").insert({
                 tenant_id: tenant.id,
@@ -411,3 +433,67 @@ Deno.serve(async (req) => {
 
   return new Response("Method not allowed", { status: 405 })
 })
+
+// Parsear fecha de tour en texto libre ("sábado 5pm", "Friday", "viernes a las 3pm")
+function parseTourDate(text: string | null): string {
+  if (!text) return new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString()
+
+  // Si es fecha ISO directa
+  const direct = Date.parse(text)
+  if (!isNaN(direct)) return new Date(direct).toISOString()
+
+  const lower = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+  const now = new Date()
+
+  // Mapeo día de la semana → número (0=domingo)
+  const dayMap: Record<string, number> = {
+    domingo: 0, sunday: 0, dom: 0, sun: 0,
+    lunes: 1, monday: 1, lun: 1, mon: 1,
+    martes: 2, tuesday: 2, mar: 2, tue: 2,
+    miercoles: 3, wednesday: 3, mie: 3, wed: 3,
+    jueves: 4, thursday: 4, jue: 4, thu: 4,
+    viernes: 5, friday: 5, vie: 5, fri: 5,
+    sabado: 6, saturday: 6, sab: 6, sat: 6,
+  }
+
+  // Buscar día de la semana en el texto
+  let targetDay: number | null = null
+  for (const [word, num] of Object.entries(dayMap)) {
+    if (lower.includes(word)) { targetDay = num; break }
+  }
+
+  // Hoy / mañana
+  if (lower.includes("hoy") || lower.includes("today")) {
+    targetDay = now.getDay()
+  } else if (lower.includes("manana") || lower.includes("tomorrow")) {
+    const tomorrow = new Date(now)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    targetDay = tomorrow.getDay()
+  }
+
+  // Calcular el próximo día de la semana
+  let date = new Date(now)
+  if (targetDay !== null) {
+    const currentDay = now.getDay()
+    let daysAhead = targetDay - currentDay
+    if (daysAhead <= 0) daysAhead += 7 // próxima semana si ya pasó
+    date.setDate(now.getDate() + daysAhead)
+  } else {
+    // Fallback: +3 días
+    date.setDate(now.getDate() + 3)
+  }
+
+  // Extraer hora si la mencionan ("5pm", "3pm", "a las 2")
+  const hourMatch = lower.match(/(\d{1,2})\s*(pm|am|p\.m\.|a\.m\.)?/)
+  if (hourMatch) {
+    let hour = parseInt(hourMatch[1])
+    const isPM = hourMatch[2]?.startsWith("p")
+    if (isPM && hour < 12) hour += 12
+    if (!hourMatch[2] && hour < 8) hour += 12 // asumir PM si dice "3" sin am/pm
+    date.setHours(hour, 0, 0, 0)
+  } else {
+    date.setHours(14, 0, 0, 0) // default 2pm si no dice hora
+  }
+
+  return date.toISOString()
+}
