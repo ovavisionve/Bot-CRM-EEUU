@@ -238,7 +238,7 @@ export async function generarRespuesta(
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "anthropic/claude-sonnet-4",
+        model: "anthropic/claude-haiku-4-5-20251001",
         max_tokens: 512,
         messages,
       }),

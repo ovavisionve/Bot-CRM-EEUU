@@ -116,7 +116,7 @@ Devolvé SOLO JSON válido, sin markdown, sin explicación:
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "anthropic/claude-sonnet-4",
+        model: "anthropic/claude-haiku-4-5-20251001",
         max_tokens: 400,
         messages: [{ role: "user", content: prompt }],
         response_format: { type: "json_object" },
