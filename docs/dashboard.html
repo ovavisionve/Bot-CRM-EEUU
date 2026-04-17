@@ -2,7 +2,13 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#1877f2">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="OVA REAL">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.svg">
   <title>OVA REAL - CRM</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -2850,8 +2856,44 @@
       return Math.floor(hours / 24) + "d"
     }
 
-    // Auto-refresh
+    // Auto-refresh (solo si Realtime no está activo)
     setInterval(() => { if (currentView === "leads") loadLeads() }, 15000)
+
+    // ===== PWA: Registro Service Worker + Push Notifications =====
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js").then(function(reg) {
+        console.log("[PWA] Service Worker registrado")
+        // Push subscription (si la feature está ON y se concede permiso)
+        if (currentTenant?.features?.push_notifications && "PushManager" in window) {
+          Notification.requestPermission().then(function(perm) {
+            if (perm === "granted") {
+              const vapidKey = "BPeK_hfHBV2gxO4MW79gFFMLeJ7sb0w9KNoXw5x5vJuscWxzUm5418j3-xFfKbuhiS_u-3EwWDZ0CQbDUdEqfFY"
+              if (vapidKey.startsWith("REPLACE")) return // no configurado
+              reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlB64ToUint8Array(vapidKey),
+              }).then(function(sub) {
+                fetch(SUPABASE_URL + "/functions/v1/dashboard?action=push-subscribe", {
+                  method: "POST",
+                  headers: { Authorization: "Bearer " + window.token, "Content-Type": "application/json" },
+                  body: JSON.stringify({ subscription: sub.toJSON() }),
+                })
+                console.log("[PWA] Push subscription OK")
+              }).catch(function(e) { console.warn("[PWA] Push subscribe failed:", e) })
+            }
+          })
+        }
+      }).catch(function(e) { console.warn("[PWA] SW registration failed:", e) })
+    }
+
+    function urlB64ToUint8Array(base64String) {
+      const padding = "=".repeat((4 - base64String.length % 4) % 4)
+      const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/")
+      const rawData = atob(base64)
+      const arr = new Uint8Array(rawData.length)
+      for (let i = 0; i < rawData.length; ++i) arr[i] = rawData.charCodeAt(i)
+      return arr
+    }
   </script>
 </body>
 </html>

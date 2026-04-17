@@ -297,6 +297,32 @@ Deno.serve(async (req) => {
     return json({ leads: data || [] })
   }
 
+  // ─── POST ?action=push-subscribe — registrar push subscription ───
+  if (req.method === "POST" && action === "push-subscribe") {
+    const { subscription } = await req.json()
+    if (!subscription?.endpoint || !subscription?.keys) return json({ error: "Invalid subscription" }, 400)
+    const tid = user.tenant_id
+    if (!tid) return json({ error: "No tenant" }, 400)
+    if (!(await checkFeature(tid, "push_notifications"))) return json({ error: "Feature push_notifications no activa" }, 403)
+
+    await supabase.from("push_subscriptions").upsert({
+      user_id: user.id,
+      tenant_id: tid,
+      endpoint: subscription.endpoint,
+      p256dh: subscription.keys.p256dh,
+      auth: subscription.keys.auth,
+    }, { onConflict: "endpoint" })
+    return json({ ok: true })
+  }
+
+  // ─── POST ?action=push-unsubscribe — remover push subscription ───
+  if (req.method === "POST" && action === "push-unsubscribe") {
+    const { endpoint } = await req.json()
+    if (!endpoint) return json({ error: "Endpoint requerido" }, 400)
+    await supabase.from("push_subscriptions").delete().eq("endpoint", endpoint).eq("user_id", user.id)
+    return json({ ok: true })
+  }
+
   // ═══════════════ FASE 11: INTEGRACIONES ═══════════════
 
   // ─── GET ?action=api-tokens — listar tokens del tenant ───
