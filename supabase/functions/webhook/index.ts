@@ -273,12 +273,12 @@ Deno.serve(async (req) => {
           const historial = await obtenerHistorial(senderId, tenant.id)
 
           // DETECCIÓN DE LOOP: si los últimos 3 outbound son casi iguales, pausar bot
-          const recentOutbound = historial
+          const loopCheck = historial
             .filter((m: any) => m.direction === "outbound")
             .slice(-4)
             .map((m: any) => m.message_text.substring(0, 50).toLowerCase())
-          if (recentOutbound.length >= 3) {
-            const last3 = recentOutbound.slice(-3)
+          if (loopCheck.length >= 3) {
+            const last3 = loopCheck.slice(-3)
             const allSimilar = last3.every((t: string) =>
               last3[0].includes(t.substring(0, 20)) || t.includes(last3[0].substring(0, 20))
             )
