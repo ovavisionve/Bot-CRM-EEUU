@@ -53,6 +53,13 @@
     .btn-secondary { background: var(--surface-alt); color: var(--text); border: 1px solid var(--border); }
     .btn-secondary:hover { background: var(--border); }
     .btn-sm { padding: 5px 12px; font-size: 12px; }
+    .nav-btn {
+      padding: 8px 16px; background: transparent; border: none;
+      color: var(--text-soft); cursor: pointer; font-size: 13px;
+      font-weight: 500; border-radius: 8px; transition: all 0.15s;
+    }
+    .nav-btn:hover { background: var(--surface-alt); color: var(--text); }
+    .nav-btn.active { background: var(--brand); color: white; }
 
     .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
     .user-info { font-size: 13px; color: var(--text-soft); }
@@ -260,11 +267,11 @@
       <button class="btn" onclick="openNewTenantModal()">+ Nuevo cliente</button>
     </div>
 
-    <div style="display:flex;gap:8px;margin-bottom:16px;">
-      <button class="nav-btn active" id="admin-tab-tenants" onclick="setAdminTab('tenants')">Clientes</button>
-      <button class="nav-btn" id="admin-tab-health" onclick="setAdminTab('health')">🩺 System Health</button>
-      <button class="nav-btn" id="admin-tab-errors" onclick="setAdminTab('errors')">⚠️ Errores</button>
-      <button class="nav-btn" id="admin-tab-audit" onclick="setAdminTab('audit')">📋 Audit Log</button>
+    <div style="display:flex;gap:6px;margin-bottom:20px;background:var(--surface);padding:4px;border-radius:10px;border:1px solid var(--border);width:fit-content;">
+      <button class="nav-btn active" id="admin-tab-tenants" onclick="setAdminTab('tenants')" style="padding:10px 20px;">👥 Clientes</button>
+      <button class="nav-btn" id="admin-tab-health" onclick="setAdminTab('health')" style="padding:10px 20px;">🩺 Health</button>
+      <button class="nav-btn" id="admin-tab-errors" onclick="setAdminTab('errors')" style="padding:10px 20px;">⚠️ Errores</button>
+      <button class="nav-btn" id="admin-tab-audit" onclick="setAdminTab('audit')" style="padding:10px 20px;">📋 Audit</button>
     </div>
     <div id="admin-content">
     <div class="stats-grid" id="stats"></div>
@@ -373,7 +380,10 @@
       adminTab = tab
       document.querySelectorAll("[id^='admin-tab-']").forEach(b => b.classList.remove("active"))
       document.getElementById("admin-tab-" + tab)?.classList.add("active")
-      const content = document.getElementById("admin-content") || document.getElementById("tenants-container")?.parentElement
+
+      // Limpiar contenido dinámico previo SIEMPRE
+      const old = document.getElementById("admin-dynamic")
+      if (old) old.remove()
 
       if (tab === "tenants") {
         document.getElementById("stats").style.display = ""
@@ -383,70 +393,91 @@
       document.getElementById("stats").style.display = "none"
       document.getElementById("tenants-container").style.display = "none"
 
+      let h = ""
+
       if (tab === "health") {
         const r = await api("?action=system-health")
-        let h = '<div style="margin-top:20px;"><h2 style="font-size:22px;margin-bottom:16px;">🩺 System Health</h2>'
-        h += '<div class="stats-grid">' +
-          '<div class="stat"><div class="label">Status</div><div class="value" style="color:var(--success);">✓ ' + r.status + '</div></div>' +
-          '<div class="stat"><div class="label">Tenants activos</div><div class="value">' + (r.tenants?.active || 0) + ' / ' + (r.tenants?.total || 0) + '</div></div>' +
-          '<div class="stat"><div class="label">Leads hoy</div><div class="value">' + (r.leads?.today || 0) + '</div></div>' +
-          '<div class="stat"><div class="label">Leads última semana</div><div class="value">' + (r.leads?.week || 0) + '</div></div>' +
-          '<div class="stat"><div class="label">Leads total</div><div class="value">' + (r.leads?.total || 0) + '</div></div>' +
-          '<div class="stat"><div class="label">Mensajes hoy</div><div class="value">' + (r.messages?.today || 0) + '</div></div>' +
-          '<div class="stat"><div class="label">Mensajes total</div><div class="value">' + (r.messages?.total || 0) + '</div></div>' +
-          '<div class="stat"><div class="label">Errores hoy</div><div class="value" style="color:' + ((r.errors?.today||0) > 0 ? 'var(--danger)' : 'var(--success)') + ';">' + (r.errors?.today || 0) + '</div></div>' +
-          '<div class="stat"><div class="label">Errores semana</div><div class="value">' + (r.errors?.week || 0) + '</div></div>' +
+        h = '<div style="margin-top:20px;">' +
+          '<div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">' +
+            '<h2 style="font-size:24px;">System Health</h2>' +
+            '<span style="background:#e6f4ea;color:#42b72a;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;">✓ ' + (r.status || "operational") + '</span>' +
+          '</div>' +
+          '<div class="stats-grid" style="grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));">' +
+            statCard("Tenants activos", (r.tenants?.active || 0) + " / " + (r.tenants?.total || 0), "👥") +
+            statCard("Leads hoy", r.leads?.today || 0, "📥") +
+            statCard("Leads semana", r.leads?.week || 0, "📊") +
+            statCard("Leads total", r.leads?.total || 0, "📇") +
+            statCard("Mensajes hoy", r.messages?.today || 0, "💬") +
+            statCard("Mensajes total", r.messages?.total || 0, "📨") +
+            statCard("Errores hoy", r.errors?.today || 0, "⚠️", (r.errors?.today||0) > 0) +
+            statCard("Errores semana", r.errors?.week || 0, "🔴", (r.errors?.week||0) > 0) +
+          '</div>' +
+          '<p style="color:var(--text-muted);font-size:12px;margin-top:16px;">Último chequeo: ' + new Date(r.checked_at || Date.now()).toLocaleString("es", {dateStyle:"medium",timeStyle:"short"}) + '</p>' +
         '</div>'
-        h += '<p style="color:var(--text-muted);font-size:12px;margin-top:12px;">Chequeado: ' + (r.checked_at || "-") + '</p></div>'
-        document.getElementById("tenants-container").insertAdjacentHTML("afterend", '<div id="admin-dynamic">' + h + '</div>')
       } else if (tab === "errors") {
         const r = await api("?action=error-log")
         const errs = r.errors || []
-        let h = '<div style="margin-top:20px;"><h2 style="font-size:22px;margin-bottom:16px;">⚠️ Errores recientes (' + errs.length + ')</h2>'
-        if (errs.length === 0) h += '<p style="color:var(--success);">Sin errores recientes ✓</p>'
-        else {
-          h += '<div style="display:flex;flex-direction:column;gap:8px;">'
+        h = '<div style="margin-top:20px;">' +
+          '<h2 style="font-size:24px;margin-bottom:20px;">Errores recientes (' + errs.length + ')</h2>'
+        if (errs.length === 0) {
+          h += '<div style="background:var(--success-bg);color:var(--success);padding:24px;border-radius:10px;text-align:center;font-weight:600;">✓ Sin errores recientes. Todo funcionando correctamente.</div>'
+        } else {
           for (const e of errs) {
-            h += '<div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--danger);padding:12px;border-radius:6px;">' +
-              '<div style="font-weight:600;font-size:13px;">[' + esc(e.function_name||"") + '] ' + esc(e.error_message||"") + '</div>' +
-              '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">' + (e.created_at||"") + '</div>' +
+            h += '<div style="background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--danger);padding:14px 16px;border-radius:8px;margin-bottom:10px;">' +
+              '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+                '<div style="font-weight:600;font-size:13px;color:var(--text);">' + esc(e.error_message||"") + '</div>' +
+                '<span style="font-size:11px;color:var(--text-muted);white-space:nowrap;margin-left:12px;">' + new Date(e.created_at).toLocaleString("es",{dateStyle:"short",timeStyle:"short"}) + '</span>' +
+              '</div>' +
+              '<div style="font-size:12px;color:var(--brand);margin-top:4px;">[' + esc(e.function_name||"unknown") + ']</div>' +
             '</div>'
           }
-          h += '</div>'
         }
         h += '</div>'
-        document.getElementById("tenants-container").insertAdjacentHTML("afterend", '<div id="admin-dynamic">' + h + '</div>')
       } else if (tab === "audit") {
         const r = await api("?action=audit-log")
         const logs = r.logs || []
-        let h = '<div style="margin-top:20px;"><h2 style="font-size:22px;margin-bottom:16px;">📋 Audit Log (últimos 100)</h2>'
-        if (logs.length === 0) h += '<p style="color:var(--text-muted);">Sin registros aún.</p>'
-        else {
-          h += '<table style="width:100%;border-collapse:collapse;"><thead><tr style="border-bottom:1px solid var(--border);">' +
-            '<th style="text-align:left;padding:8px;font-size:11px;color:var(--text-soft);">Fecha</th>' +
-            '<th style="text-align:left;padding:8px;font-size:11px;color:var(--text-soft);">Acción</th>' +
-            '<th style="text-align:left;padding:8px;font-size:11px;color:var(--text-soft);">Entidad</th>' +
-            '<th style="text-align:left;padding:8px;font-size:11px;color:var(--text-soft);">ID</th>' +
-            '<th style="text-align:left;padding:8px;font-size:11px;color:var(--text-soft);">Cambios</th>' +
-          '</tr></thead><tbody>'
-          for (const l of logs) {
+        h = '<div style="margin-top:20px;">' +
+          '<h2 style="font-size:24px;margin-bottom:20px;">Audit Log (' + logs.length + ')</h2>'
+        if (logs.length === 0) {
+          h += '<div style="background:var(--surface-alt);padding:24px;border-radius:10px;text-align:center;color:var(--text-soft);">Sin registros de auditoría aún. Los cambios en leads y tours se registran automáticamente.</div>'
+        } else {
+          h += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;">' +
+            '<table style="width:100%;border-collapse:collapse;">' +
+            '<thead><tr style="background:var(--surface-alt);">' +
+              '<th style="text-align:left;padding:12px 14px;font-size:11px;color:var(--text-soft);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;">Fecha</th>' +
+              '<th style="text-align:left;padding:12px 14px;font-size:11px;color:var(--text-soft);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;">Acción</th>' +
+              '<th style="text-align:left;padding:12px 14px;font-size:11px;color:var(--text-soft);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;">Entidad</th>' +
+              '<th style="text-align:left;padding:12px 14px;font-size:11px;color:var(--text-soft);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;">ID</th>' +
+              '<th style="text-align:left;padding:12px 14px;font-size:11px;color:var(--text-soft);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;">Cambios</th>' +
+            '</tr></thead><tbody>'
+          for (let i = 0; i < logs.length; i++) {
+            const l = logs[i]
+            const bg = i % 2 === 0 ? "" : "background:var(--surface-alt);"
+            const actionBg = l.action === "create" ? "var(--success-bg)" : l.action === "delete" ? "var(--danger-bg)" : "#e7f3ff"
             const actionColor = l.action === "create" ? "var(--success)" : l.action === "delete" ? "var(--danger)" : "var(--brand)"
-            h += '<tr style="border-bottom:1px solid var(--border);">' +
-              '<td style="padding:8px;font-size:12px;color:var(--text-soft);">' + new Date(l.created_at).toLocaleString("es",{dateStyle:"short",timeStyle:"short"}) + '</td>' +
-              '<td style="padding:8px;"><span style="color:' + actionColor + ';font-weight:600;font-size:12px;text-transform:uppercase;">' + l.action + '</span></td>' +
-              '<td style="padding:8px;font-size:12px;">' + esc(l.entity||"") + '</td>' +
-              '<td style="padding:8px;font-size:11px;font-family:monospace;color:var(--text-muted);">' + esc((l.entity_id||"").substring(0,15)) + '</td>' +
-              '<td style="padding:8px;font-size:11px;color:var(--text-soft);max-width:300px;overflow:hidden;text-overflow:ellipsis;">' + (l.changes ? JSON.stringify(l.changes).substring(0,80) : "-") + '</td>' +
+            h += '<tr style="border-bottom:1px solid var(--border);' + bg + '">' +
+              '<td style="padding:10px 14px;font-size:12px;color:var(--text-soft);">' + new Date(l.created_at).toLocaleString("es",{dateStyle:"short",timeStyle:"short"}) + '</td>' +
+              '<td style="padding:10px 14px;"><span style="background:' + actionBg + ';color:' + actionColor + ';padding:3px 8px;border-radius:10px;font-size:11px;font-weight:600;text-transform:uppercase;">' + l.action + '</span></td>' +
+              '<td style="padding:10px 14px;font-size:13px;color:var(--text);">' + esc(l.entity||"") + '</td>' +
+              '<td style="padding:10px 14px;font-size:11px;font-family:monospace;color:var(--text-muted);">' + esc((l.entity_id||"").substring(0,12)) + '</td>' +
+              '<td style="padding:10px 14px;font-size:11px;color:var(--text-soft);max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (l.changes ? JSON.stringify(l.changes).substring(0,60) : "-") + '</td>' +
             '</tr>'
           }
-          h += '</tbody></table>'
+          h += '</tbody></table></div>'
         }
         h += '</div>'
+      }
+
+      if (h) {
         document.getElementById("tenants-container").insertAdjacentHTML("afterend", '<div id="admin-dynamic">' + h + '</div>')
       }
-      // Limpiar contenido previo de tabs dinámicos
-      const old = document.getElementById("admin-dynamic")
-      // No limpiar si es el que acabamos de crear (se maneja en el render)
+    }
+
+    function statCard(label, value, icon, isAlert) {
+      return '<div class="stat" style="' + (isAlert ? 'border-left:3px solid var(--danger);' : '') + '">' +
+        '<div class="label">' + icon + ' ' + label + '</div>' +
+        '<div class="value" style="' + (isAlert ? 'color:var(--danger);' : '') + '">' + value + '</div>' +
+      '</div>'
     }
 
     window.logout = async function() {
