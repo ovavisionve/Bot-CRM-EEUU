@@ -2867,7 +2867,7 @@
         if (currentTenant?.features?.push_notifications && "PushManager" in window) {
           Notification.requestPermission().then(function(perm) {
             if (perm === "granted") {
-              const vapidKey = "REPLACE_WITH_VAPID_PUBLIC_KEY"
+              const vapidKey = "BPeK_hfHBV2gxO4MW79gFFMLeJ7sb0w9KNoXw5x5vJuscWxzUm5418j3-xFfKbuhiS_u-3EwWDZ0CQbDUdEqfFY"
               if (vapidKey.startsWith("REPLACE")) return // no configurado
               reg.pushManager.subscribe({
                 userVisibleOnly: true,
