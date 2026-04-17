@@ -297,6 +297,145 @@ Deno.serve(async (req) => {
     return json({ leads: data || [] })
   }
 
+  // ═══════════════ FASE 11: INTEGRACIONES ═══════════════
+
+  // ─── GET ?action=api-tokens — listar tokens del tenant ───
+  if (action === "api-tokens") {
+    const tid = user.tenant_id
+    if (!tid) return json({ tokens: [] })
+    const { data } = await supabase
+      .from("api_tokens")
+      .select("id, name, scopes, last_used_at, created_at, token")
+      .eq("tenant_id", tid)
+      .order("created_at", { ascending: false })
+    // Enmascarar todo menos los primeros 10 chars
+    const tokens = (data || []).map((t: any) => ({
+      ...t, token: t.token.substring(0, 10) + "..." + t.token.substring(t.token.length - 4)
+    }))
+    return json({ tokens })
+  }
+
+  // ─── POST ?action=create-api-token — generar nuevo token ───
+  if (req.method === "POST" && action === "create-api-token") {
+    const { name, scopes } = await req.json()
+    const tid = user.tenant_id
+    if (!tid) return json({ error: "No tenant" }, 400)
+    if (!(await checkFeature(tid, "api_access"))) return json({ error: "Feature api_access no activa" }, 403)
+
+    // Generar token aleatorio: prefijo + 32 bytes hex
+    const bytes = new Uint8Array(32)
+    crypto.getRandomValues(bytes)
+    const raw = "ova_" + Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("")
+
+    const { data, error } = await supabase.from("api_tokens").insert({
+      tenant_id: tid,
+      name: name || "API token",
+      token: raw,
+      scopes: scopes || ["leads:read", "leads:write"],
+      created_by: user.id,
+    }).select().single()
+    if (error) return json({ error: error.message }, 500)
+    // Devolvemos el token EN CLARO (unica vez que se ve completo)
+    return json({ ok: true, token: raw, id: data.id })
+  }
+
+  // ─── POST ?action=delete-api-token ───
+  if (req.method === "POST" && action === "delete-api-token") {
+    const { id } = await req.json()
+    const { data: t } = await supabase.from("api_tokens").select("tenant_id").eq("id", id).maybeSingle()
+    if (!t) return json({ error: "Not found" }, 404)
+    if (!canAccessTenant(user, t.tenant_id)) return json({ error: "Forbidden" }, 403)
+    const { error } = await supabase.from("api_tokens").delete().eq("id", id)
+    if (error) return json({ error: error.message }, 500)
+    return json({ ok: true })
+  }
+
+  // ─── GET ?action=outgoing-webhooks ───
+  if (action === "outgoing-webhooks") {
+    const tid = user.tenant_id
+    if (!tid) return json({ webhooks: [] })
+    const { data } = await supabase
+      .from("outgoing_webhooks")
+      .select("*")
+      .eq("tenant_id", tid)
+      .order("created_at", { ascending: false })
+    return json({ webhooks: data || [] })
+  }
+
+  // ─── POST ?action=create-outgoing-webhook ───
+  if (req.method === "POST" && action === "create-outgoing-webhook") {
+    const { name, url, events } = await req.json()
+    const tid = user.tenant_id
+    if (!tid) return json({ error: "No tenant" }, 400)
+    if (!(await checkFeature(tid, "outgoing_webhooks"))) return json({ error: "Feature outgoing_webhooks no activa" }, 403)
+
+    const secretBytes = new Uint8Array(24)
+    crypto.getRandomValues(secretBytes)
+    const secret = Array.from(secretBytes).map(b => b.toString(16).padStart(2, "0")).join("")
+
+    const { data, error } = await supabase.from("outgoing_webhooks").insert({
+      tenant_id: tid, name, url,
+      events: events || ["lead.created"],
+      secret, active: true,
+    }).select().single()
+    if (error) return json({ error: error.message }, 500)
+    return json({ ok: true, webhook: data })
+  }
+
+  // ─── POST ?action=delete-outgoing-webhook ───
+  if (req.method === "POST" && action === "delete-outgoing-webhook") {
+    const { id } = await req.json()
+    const { data: w } = await supabase.from("outgoing_webhooks").select("tenant_id").eq("id", id).maybeSingle()
+    if (!w) return json({ error: "Not found" }, 404)
+    if (!canAccessTenant(user, w.tenant_id)) return json({ error: "Forbidden" }, 403)
+    const { error } = await supabase.from("outgoing_webhooks").delete().eq("id", id)
+    if (error) return json({ error: error.message }, 500)
+    return json({ ok: true })
+  }
+
+  // ─── POST ?action=toggle-outgoing-webhook ───
+  if (req.method === "POST" && action === "toggle-outgoing-webhook") {
+    const { id, active } = await req.json()
+    const { data: w } = await supabase.from("outgoing_webhooks").select("tenant_id").eq("id", id).maybeSingle()
+    if (!w) return json({ error: "Not found" }, 404)
+    if (!canAccessTenant(user, w.tenant_id)) return json({ error: "Forbidden" }, 403)
+    const { error } = await supabase.from("outgoing_webhooks").update({ active }).eq("id", id)
+    if (error) return json({ error: error.message }, 500)
+    return json({ ok: true })
+  }
+
+  // ─── POST ?action=import-leads — bulk import desde CSV/JSON ───
+  if (req.method === "POST" && action === "import-leads") {
+    const { leads: imported } = await req.json()
+    const tid = user.tenant_id
+    if (!tid) return json({ error: "No tenant" }, 400)
+    if (!(await checkFeature(tid, "csv_import"))) return json({ error: "Feature csv_import no activa" }, 403)
+    if (!Array.isArray(imported) || imported.length === 0) return json({ error: "Sin leads para importar" }, 400)
+
+    const rows = imported.map((l: any) => ({
+      tenant_id: tid,
+      sender_id: l.sender_id || l.phone || l.email || ("import_" + Math.random().toString(36).slice(2, 12)),
+      name: l.name || null,
+      partner_name: l.partner_name || null,
+      phone: l.phone || null,
+      email: l.email || null,
+      instagram_handle: l.instagram_handle || null,
+      move_in_date: l.move_in_date || null,
+      occupants: l.occupants || null,
+      pets: l.pets || null,
+      credit_score: l.credit_score ? Number(l.credit_score) : null,
+      budget_max: l.budget_max ? Number(l.budget_max) : null,
+      language: l.language || "en",
+      source: l.source || "csv_import",
+      status: l.status || "new",
+      notes: l.notes || null,
+    }))
+
+    const { error, count } = await supabase.from("leads").insert(rows).select("*", { count: "exact", head: true })
+    if (error) return json({ error: error.message }, 500)
+    return json({ ok: true, imported: count || rows.length })
+  }
+
   // ─── GET ?action=agents — listar agentes (user_profiles) del tenant ───
   if (action === "agents") {
     let tid: string | null = null

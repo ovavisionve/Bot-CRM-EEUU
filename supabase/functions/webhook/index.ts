@@ -14,6 +14,7 @@ import { notificarAdmin } from "../_shared/notificar.ts"
 import { extraerEstadoLead } from "../_shared/extractor.ts"
 import { getTenantByInstagramId, getAgentConfig } from "../_shared/tenant.ts"
 import { calculateScore } from "../_shared/scoring.ts"
+import { fireWebhooks } from "../_shared/outgoing.ts"
 
 Deno.serve(async (req) => {
   const url = new URL(req.url)
@@ -285,6 +286,30 @@ Deno.serve(async (req) => {
             } catch (err) {
               console.error("[webhook:POST] Error creando tour:", err)
             }
+          }
+
+          // Outgoing webhooks (fire-and-forget)
+          const prevStatus = lead.status
+          const newStatus = nuevoEstado.status || prevStatus
+          fireWebhooks(tenant.id, "message.inbound", {
+            sender_id: senderId, text: mensaje, lead_id: lead.id, lead_name: leadActualizado.name,
+          }).catch(() => {})
+          // lead.created si es nuevo (lead.id existia antes de la llamada pero created_at seria reciente)
+          const isNewLead = (new Date().getTime() - new Date(lead.created_at).getTime()) < 5000
+          if (isNewLead) {
+            fireWebhooks(tenant.id, "lead.created", { lead: leadActualizado }).catch(() => {})
+          }
+          // Cambios de status
+          if (newStatus && newStatus !== prevStatus) {
+            const statusEventMap: Record<string, string> = {
+              qualified: "lead.qualified",
+              disqualified: "lead.disqualified",
+              tour_confirmed: "lead.tour_confirmed",
+              closed_won: "lead.closed_won",
+              closed_lost: "lead.closed_lost",
+            }
+            const evt = statusEventMap[newStatus]
+            if (evt) fireWebhooks(tenant.id, evt as any, { lead: leadActualizado }).catch(() => {})
           }
 
           // 10. Notificar al admin SOLO para tour_agendado (evita spam de emails)
