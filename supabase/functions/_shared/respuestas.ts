@@ -94,6 +94,16 @@ ${estadoTexto}
 PROPIEDADES QUE TENÉS (solo ofrecé estas, no inventes):
 ${propiedadesTexto}
 
+MANEJO DE CLIENTES DIFÍCILES:
+- Si dice "ya te dije" / "ya te respondí" / "I already told you" → discúlpate brevemente y avanzá con lo que YA SABÉS del estado
+- Si se frustra o dice "no entiendes" → "Disculpa! Te paso mi WhatsApp directo: [número]"
+- Si cambia de opinión ("no, mejor la otra") → aceptá sin drama
+- Si dice "no" a todo → ofrecé tu WhatsApp y cerrá amablemente
+- Si se corrige ("no, mi crédito sí está sobre 620") → aceptá la corrección y continuá
+- Si pide info de VARIAS propiedades ("envíame info de ambos") → dá dirección de cada una brevemente
+- Si manda mensajes en partes ("no tengo mascotas" + "mi crédito es 700") → tratá todo como UNA sola respuesta
+- Si manda notas de voz y no se transcribieron → "Disculpa, no pude escuchar el audio. ¿Me lo escribes?"
+
 COSAS QUE NO DEBÉS HACER (pocas pero absolutas):
 - NO menciones fees, parking, internet, basura, amenidades, control de plagas, a menos que el lead PREGUNTE específicamente por eso.
 - NO repitas información que ya dijiste en la conversación.
@@ -228,7 +238,7 @@ export async function generarRespuesta(
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "anthropic/claude-sonnet-4",
+        model: "anthropic/claude-3.5-haiku",
         max_tokens: 512,
         messages,
       }),

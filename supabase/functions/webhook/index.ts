@@ -91,6 +91,7 @@ Deno.serve(async (req) => {
 
         for (const event of eventos) {
           const senderId = event.sender?.id
+          const mid = event.message?.mid || ""
           let mensaje = event.message?.text || ""
           let attachmentType: string | null = null
           let attachmentUrl: string | null = null
@@ -111,6 +112,73 @@ Deno.serve(async (req) => {
           if (!senderId || !mensaje) continue
           if (event.message?.is_echo) continue
           if (senderId === "12334") continue
+
+          // DEDUP: verificar si ya procesamos este mid (iPhone manda duplicados)
+          if (mid) {
+            const { createClient: ccDedup } = await import("https://esm.sh/@supabase/supabase-js@2")
+            const sbDedup = ccDedup(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!)
+            const { data: existing } = await sbDedup
+              .from("conversations")
+              .select("id")
+              .eq("meta_message_id", mid)
+              .maybeSingle()
+            if (existing) {
+              console.log(`[webhook:POST] Mensaje duplicado (mid=${mid}), ignorando`)
+              continue
+            }
+          }
+
+          // DEBOUNCE: esperar 3 segundos para combinar mensajes rápidos del mismo sender
+          await new Promise(resolve => setTimeout(resolve, 3000))
+
+          // Después del debounce, leer TODOS los mensajes recientes de este sender
+          // que no hayan sido respondidos (pueden haber llegado más mientras esperábamos)
+          const { createClient: ccBatch } = await import("https://esm.sh/@supabase/supabase-js@2")
+          const sbBatch = ccBatch(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!)
+
+          // Guardar ESTE mensaje primero con el mid para dedup
+          await sbBatch.from("conversations").insert({
+            sender_id: senderId,
+            lead_id: null, // se actualiza después
+            tenant_id: tenant.id,
+            direction: "inbound",
+            message_text: mensaje,
+            channel: "instagram",
+            sent_by: "lead",
+            meta_message_id: mid || null,
+          })
+
+          // Buscar si hay mensajes inbound recientes (últimos 5s) sin respuesta outbound después
+          const { data: recentMsgs } = await sbBatch
+            .from("conversations")
+            .select("message_text, created_at")
+            .eq("sender_id", senderId)
+            .eq("tenant_id", tenant.id)
+            .eq("direction", "inbound")
+            .gte("created_at", new Date(Date.now() - 8000).toISOString())
+            .order("created_at", { ascending: true })
+
+          // Si hay más de 1 mensaje reciente, verificar si ya estamos procesando
+          // (otro webhook handler ya tomó el lote)
+          const { data: recentOutbound } = await sbBatch
+            .from("conversations")
+            .select("created_at")
+            .eq("sender_id", senderId)
+            .eq("tenant_id", tenant.id)
+            .eq("direction", "outbound")
+            .gte("created_at", new Date(Date.now() - 8000).toISOString())
+            .limit(1)
+
+          if (recentOutbound && recentOutbound.length > 0) {
+            console.log(`[webhook:POST] Ya hay respuesta reciente para ${senderId}, skippeando (otro handler lo tomó)`)
+            continue
+          }
+
+          // Combinar todos los mensajes recientes en uno solo
+          if (recentMsgs && recentMsgs.length > 1) {
+            mensaje = recentMsgs.map((m: any) => m.message_text).join(". ")
+            console.log(`[webhook:POST][${tenant.slug}] Combinando ${recentMsgs.length} mensajes: ${mensaje.substring(0, 100)}`)
+          }
 
           console.log(`[webhook:POST][${tenant.slug}] DM de ${senderId}: ${mensaje}`)
 
@@ -161,10 +229,7 @@ Deno.serve(async (req) => {
             continue
           }
 
-          // 2. Guardar mensaje inbound
-          await guardarMensaje(senderId, lead.id, tenant.id, mensaje, "inbound", {
-            channel: "instagram",
-          })
+          // 2. El mensaje inbound ya se guardó arriba en el bloque de debounce/dedup
 
           // Feature gating: handoff_to_human
           // Si está activado y el lead usa alguna handoff keyword,
