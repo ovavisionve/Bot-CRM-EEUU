@@ -112,7 +112,7 @@ Return ONLY valid JSON, no markdown.`
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "anthropic/claude-sonnet-4",
         max_tokens: 400,
         messages: [{ role: "user", content: prompt }],
         response_format: { type: "json_object" },
