@@ -37,3 +37,7 @@ verify_jwt = false
 # Stripe portal - requiere JWT de Supabase (el endpoint verifica manualmente)
 [functions.stripe-portal]
 verify_jwt = false
+
+# API publica - autenticacion via Bearer token custom (no JWT Supabase)
+[functions.public-api]
+verify_jwt = false

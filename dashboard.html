@@ -666,6 +666,7 @@
         <button class="nav-btn" data-main-view="campaigns" data-feature="drip_campaigns" onclick="setMainView('campaigns')">🎯 Campañas</button>
         <button class="nav-btn" data-main-view="handoff" data-feature="handoff_to_human" onclick="setMainView('handoff')">🚨 Handoff <span id="handoff-count" style="background:#fa383e;color:white;border-radius:10px;padding:1px 6px;font-size:10px;display:none;margin-left:4px;"></span></button>
         <button class="nav-btn" data-main-view="team" data-feature="multi_agent" onclick="setMainView('team')">👥 Equipo</button>
+        <button class="nav-btn" data-main-view="integrations" data-feature="api_access" onclick="setMainView('integrations')">🔌 Integraciones</button>
         <button class="nav-btn" data-main-view="billing" data-feature="" onclick="setMainView('billing')">💳 Plan</button>
       </div>
       <div id="main-content" style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
@@ -1305,6 +1306,258 @@
       }
     }
 
+    let integrationsTab = "tokens"
+    async function renderIntegrations() {
+      const mc = document.getElementById("main-content")
+      mc.innerHTML = '<div class="handoff-view"><div style="color:#666;padding:40px;text-align:center;">Cargando...</div></div>'
+
+      const slug = currentTenant?.slug || ""
+      const features = currentTenant?.features || {}
+
+      let html = '<div class="handoff-view" style="max-width:900px;margin:0 auto;">' +
+        '<h2 style="font-size:24px;margin-bottom:6px;">🔌 Integraciones</h2>' +
+        '<p style="color:var(--text-soft);margin-bottom:20px;">Conectá OVA REAL con tus herramientas externas.</p>' +
+        '<div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;">' +
+          '<button class="nav-btn ' + (integrationsTab==="tokens"?"active":"") + '" onclick="setIntegrationsTab(\'tokens\')">🔑 API Tokens</button>' +
+          '<button class="nav-btn ' + (integrationsTab==="webhooks"?"active":"") + '" onclick="setIntegrationsTab(\'webhooks\')">📤 Webhooks salientes</button>' +
+          '<button class="nav-btn ' + (integrationsTab==="import"?"active":"") + '" onclick="setIntegrationsTab(\'import\')">📥 Importar CSV</button>' +
+          '<button class="nav-btn ' + (integrationsTab==="widget"?"active":"") + '" onclick="setIntegrationsTab(\'widget\')">🧩 Widget web</button>' +
+        '</div>'
+
+      if (integrationsTab === "tokens") {
+        const r = await api("?action=api-tokens")
+        const tokens = r.tokens || []
+        html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">' +
+            '<h3 style="font-size:16px;">API Tokens</h3>' +
+            '<button class="btn" onclick="createApiToken()">+ Generar token</button>' +
+          '</div>' +
+          '<p style="color:var(--text-soft);font-size:13px;margin-bottom:14px;">Usá estos tokens para conectar OVA REAL con Zapier, Make, Airtable, etc.</p>' +
+          '<div style="background:var(--surface-alt);padding:12px;border-radius:6px;font-size:12px;font-family:monospace;margin-bottom:14px;border:1px dashed var(--border);">' +
+            '<strong>Base URL:</strong> https://vrfydffwczomvuoigwsm.supabase.co/functions/v1/public-api<br>' +
+            '<strong>Auth header:</strong> Authorization: Bearer ova_XXXXXX<br>' +
+            '<strong>Endpoints:</strong> GET /leads, POST /leads, GET /leads/:id' +
+          '</div>'
+        if (tokens.length === 0) {
+          html += '<div style="color:var(--text-muted);padding:20px;text-align:center;">Sin tokens aún.</div>'
+        } else {
+          html += '<table style="width:100%;border-collapse:collapse;">'
+          for (const t of tokens) {
+            html += '<tr style="border-bottom:1px solid var(--border);">' +
+              '<td style="padding:10px 8px;"><strong>' + esc(t.name) + '</strong><br><small style="color:var(--text-muted);font-family:monospace;">' + esc(t.token) + '</small></td>' +
+              '<td style="padding:10px 8px;font-size:12px;color:var(--text-soft);">Scopes: ' + (t.scopes || []).join(", ") + '</td>' +
+              '<td style="padding:10px 8px;font-size:12px;color:var(--text-soft);">' + (t.last_used_at ? "Usado " + getTimeAgo(t.last_used_at) : "Sin usar") + '</td>' +
+              '<td style="padding:10px 8px;text-align:right;"><button class="edit-btn" onclick="deleteApiToken(\'' + t.id + '\')">Borrar</button></td>' +
+            '</tr>'
+          }
+          html += '</table>'
+        }
+        html += '</div>'
+      } else if (integrationsTab === "webhooks") {
+        const r = await api("?action=outgoing-webhooks")
+        const hooks = r.webhooks || []
+        html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">' +
+            '<h3 style="font-size:16px;">Webhooks salientes</h3>' +
+            '<button class="btn" onclick="createOutgoingWebhook()">+ Nuevo webhook</button>' +
+          '</div>' +
+          '<p style="color:var(--text-soft);font-size:13px;margin-bottom:14px;">Recibí notificaciones en tu servidor cuando pasan eventos (lead nuevo, tour confirmado, etc.)</p>' +
+          '<div style="background:var(--surface-alt);padding:12px;border-radius:6px;font-size:12px;margin-bottom:14px;">' +
+            '<strong>Eventos:</strong> lead.created · lead.qualified · lead.tour_confirmed · lead.closed_won · lead.closed_lost · message.inbound' +
+          '</div>'
+        if (hooks.length === 0) {
+          html += '<div style="color:var(--text-muted);padding:20px;text-align:center;">Sin webhooks configurados.</div>'
+        } else {
+          for (const h of hooks) {
+            html += '<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">' +
+              '<div><strong>' + esc(h.name) + '</strong> ' +
+                (h.active ? '<span class="status-badge status-qualified">Activo</span>' : '<span class="status-badge status-disqualified">Pausado</span>') +
+                '<div style="font-size:12px;color:var(--text-soft);font-family:monospace;margin-top:4px;">' + esc(h.url) + '</div>' +
+                '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Eventos: ' + (h.events||[]).join(", ") +
+                  (h.last_status_code ? ' · Último status: ' + h.last_status_code : '') + '</div>' +
+              '</div>' +
+              '<div style="display:flex;gap:6px;">' +
+                '<button class="edit-btn" onclick="toggleOutgoingWebhook(\'' + h.id + '\',' + !h.active + ')">' + (h.active?'Pausar':'Activar') + '</button>' +
+                '<button class="edit-btn" style="color:#fa383e;" onclick="deleteOutgoingWebhook(\'' + h.id + '\')">Borrar</button>' +
+              '</div>' +
+            '</div>'
+          }
+        }
+        html += '</div>'
+      } else if (integrationsTab === "import") {
+        html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;">' +
+          '<h3 style="font-size:16px;margin-bottom:14px;">Importar leads desde CSV</h3>' +
+          '<p style="color:var(--text-soft);font-size:13px;margin-bottom:14px;">Subí un CSV con columnas: <code>name, phone, email, move_in_date, credit_score, notes, status</code> (todas opcionales).</p>' +
+          '<input type="file" id="csv-input" accept=".csv,text/csv" style="margin-bottom:14px;"/>' +
+          '<div id="csv-preview" style="background:var(--surface-alt);padding:12px;border-radius:6px;font-size:12px;font-family:monospace;max-height:200px;overflow:auto;display:none;"></div>' +
+          '<div style="margin-top:14px;">' +
+            '<button class="btn" onclick="importCsv()" id="btn-import" disabled>Importar leads</button>' +
+            '<a class="btn btn-secondary" style="margin-left:8px;text-decoration:none;display:inline-block;" href="data:text/csv;charset=utf-8,name,phone,email,move_in_date,credit_score,notes,status%0A%22Ejemplo Lead%22,%22+17865551234%22,%22ejemplo@email.com%22,%22June 2026%22,720,%22Interesado 2BR%22,new" download="template_leads.csv">Descargar template</a>' +
+          '</div>' +
+        '</div>'
+      } else if (integrationsTab === "widget") {
+        // Necesita un token para el widget
+        const r = await api("?action=api-tokens")
+        const tokens = r.tokens || []
+        const firstToken = tokens[0]
+        const tokenSample = firstToken ? firstToken.token : "ova_XXXXXXXXXXXXXXXX"
+        const brandColor = currentTenant?.brand_color || "#1877f2"
+        const snippet = '<script src="https://ovavisionve.github.io/Bot-CRM-EEUU/widget.js"\n' +
+          '        data-token="' + tokenSample + '"\n' +
+          '        data-brand-color="' + brandColor + '"\n' +
+          '        data-agent-name="' + (currentTenant?.agent_name || "Agente") + '"></' + 'script>'
+
+        html += '<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;">' +
+          '<h3 style="font-size:16px;margin-bottom:14px;">Widget embebible para tu sitio</h3>' +
+          '<p style="color:var(--text-soft);font-size:13px;margin-bottom:14px;">Pegá este snippet antes del <code>&lt;/body&gt;</code> de tu sitio. Aparece un chat flotante que captura leads directo al CRM.</p>' +
+          '<pre style="background:var(--surface-alt);padding:14px;border-radius:6px;font-size:12px;overflow-x:auto;border:1px solid var(--border);">' + esc(snippet) + '</pre>' +
+          '<button class="btn" style="margin-top:12px;" onclick="copySnippet()">📋 Copiar snippet</button>' +
+          (firstToken ? '' :
+            '<div style="background:var(--warn-bg);color:#8a6200;padding:12px;border-radius:6px;margin-top:14px;font-size:13px;border-left:3px solid var(--warn);">' +
+            '⚠️ Generá primero un API token en la pestaña 🔑 API Tokens para que el widget funcione.' +
+            '</div>') +
+          '<h3 style="font-size:14px;margin-top:24px;margin-bottom:10px;">Preview</h3>' +
+          '<div style="background:#f5f6f7;padding:20px;border-radius:8px;text-align:center;border:1px dashed var(--border);">' +
+            '<button style="position:relative;width:60px;height:60px;border-radius:50%;background:' + brandColor + ';color:white;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.2);border:none;font-size:26px;">💬</button>' +
+            '<div style="margin-top:8px;color:var(--text-muted);font-size:12px;">Botón flotante que aparecería en la esquina inferior derecha de tu sitio.</div>' +
+          '</div>' +
+        '</div>'
+
+        window._widgetSnippet = snippet
+      }
+
+      html += '</div>'
+      mc.innerHTML = html
+
+      // Bind CSV file input si estamos en import tab
+      if (integrationsTab === "import") {
+        const input = document.getElementById("csv-input")
+        if (input) input.addEventListener("change", parseCsv)
+      }
+    }
+
+    window.setIntegrationsTab = function(t) { integrationsTab = t; renderIntegrations() }
+
+    window.createApiToken = async function() {
+      const name = prompt("Nombre del token (ej: Zapier, Website):")
+      if (!name) return
+      const r = await api("?action=create-api-token", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      })
+      if (r.ok) {
+        prompt("⚠️ COPIÁ ESTE TOKEN - es la única vez que lo vas a ver completo:", r.token)
+        renderIntegrations()
+      } else toast(r.error || "Error", true)
+    }
+
+    window.deleteApiToken = async function(id) {
+      if (!confirm("¿Borrar este token? Los servicios que lo usen van a dejar de funcionar.")) return
+      const r = await api("?action=delete-api-token", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      })
+      if (r.ok) { toast("Borrado"); renderIntegrations() }
+      else toast(r.error || "Error", true)
+    }
+
+    window.createOutgoingWebhook = async function() {
+      const name = prompt("Nombre del webhook (ej: Zapier new lead):")
+      if (!name) return
+      const url = prompt("URL (endpoint que recibe el POST):")
+      if (!url) return
+      const events = prompt("Eventos (coma-separados):\nlead.created, lead.qualified, lead.tour_confirmed, lead.closed_won, message.inbound", "lead.created")
+      const r = await api("?action=create-outgoing-webhook", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, url, events: (events||"lead.created").split(",").map(s=>s.trim()) }),
+      })
+      if (r.ok) { toast("Webhook creado"); renderIntegrations() }
+      else toast(r.error || "Error", true)
+    }
+
+    window.toggleOutgoingWebhook = async function(id, active) {
+      const r = await api("?action=toggle-outgoing-webhook", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, active }),
+      })
+      if (r.ok) { toast(active ? "Activado" : "Pausado"); renderIntegrations() }
+      else toast(r.error || "Error", true)
+    }
+
+    window.deleteOutgoingWebhook = async function(id) {
+      if (!confirm("¿Borrar este webhook?")) return
+      const r = await api("?action=delete-outgoing-webhook", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      })
+      if (r.ok) { toast("Borrado"); renderIntegrations() }
+      else toast(r.error || "Error", true)
+    }
+
+    let parsedLeads = []
+    function parseCsv(e) {
+      const file = e.target.files[0]
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = function(ev) {
+        const text = ev.target.result
+        const lines = text.split(/\r?\n/).filter(l => l.trim())
+        if (lines.length < 2) { toast("CSV vacío", true); return }
+        const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/"/g, ""))
+        parsedLeads = []
+        for (let i = 1; i < lines.length; i++) {
+          const cells = parseCsvLine(lines[i])
+          const row = {}
+          for (let j = 0; j < headers.length; j++) row[headers[j]] = cells[j] || null
+          parsedLeads.push(row)
+        }
+        const preview = document.getElementById("csv-preview")
+        preview.style.display = "block"
+        preview.textContent = "Parseados " + parsedLeads.length + " leads.\n\nPrimeros 3:\n" +
+          JSON.stringify(parsedLeads.slice(0, 3), null, 2)
+        document.getElementById("btn-import").disabled = false
+      }
+      reader.readAsText(file)
+    }
+    function parseCsvLine(line) {
+      const out = []; let cur = ""; let inQ = false
+      for (let i = 0; i < line.length; i++) {
+        const c = line[i]
+        if (c === '"') inQ = !inQ
+        else if (c === "," && !inQ) { out.push(cur.trim()); cur = "" }
+        else cur += c
+      }
+      out.push(cur.trim())
+      return out
+    }
+    window.importCsv = async function() {
+      if (parsedLeads.length === 0) return
+      const btn = document.getElementById("btn-import")
+      btn.disabled = true; btn.textContent = "Importando..."
+      const r = await api("?action=import-leads", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leads: parsedLeads }),
+      })
+      if (r.ok) {
+        toast("Importados " + r.imported + " leads")
+        parsedLeads = []
+        document.getElementById("btn-import").disabled = true
+        document.getElementById("btn-import").textContent = "Importar leads"
+        document.getElementById("csv-input").value = ""
+        document.getElementById("csv-preview").style.display = "none"
+        await loadLeads()
+      } else {
+        toast(r.error || "Error", true)
+        btn.disabled = false; btn.textContent = "Importar leads"
+      }
+    }
+
+    window.copySnippet = function() {
+      navigator.clipboard.writeText(window._widgetSnippet || "")
+        .then(() => toast("Snippet copiado"))
+        .catch(() => toast("No se pudo copiar", true))
+    }
+
     async function renderBilling() {
       const mc = document.getElementById("main-content")
       mc.innerHTML = '<div class="handoff-view"><div style="color:#666;padding:40px;text-align:center;">Cargando...</div></div>'
@@ -1428,6 +1681,8 @@
         renderBilling()
       } else if (currentMainView === "team") {
         renderTeam()
+      } else if (currentMainView === "integrations") {
+        renderIntegrations()
       } else {
         // inbox
         if (selectedLead) {
