@@ -131,18 +131,32 @@ Devolvé SOLO JSON válido, sin markdown, sin explicación:
     const data = await res.json()
     const texto = data.choices?.[0]?.message?.content || "{}"
 
-    // Intentar parsear el JSON (a veces viene envuelto en ```)
-    const limpio = texto.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim()
-    const parsed = JSON.parse(limpio)
+    console.log("[extractor] Respuesta raw (primeros 300 chars):", texto.substring(0, 300))
 
-    console.log("[extractor] Estado extraído:", JSON.stringify(parsed))
+    // Parser robusto: buscar el primer { y el último } sin importar texto alrededor
+    const firstBrace = texto.indexOf("{")
+    const lastBrace = texto.lastIndexOf("}")
+    if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+      console.error("[extractor] No se encontró JSON válido en la respuesta")
+      return {}
+    }
+    const jsonStr = texto.substring(firstBrace, lastBrace + 1)
+    const parsed = JSON.parse(jsonStr)
+
+    console.log("[extractor] JSON parseado:", JSON.stringify(parsed))
 
     // Filtrar nulls para no sobrescribir con nulls valores existentes
     const filtrado: LeadEstado = {}
     for (const key of Object.keys(parsed)) {
-      if (parsed[key] !== null && parsed[key] !== undefined && parsed[key] !== "") {
-        filtrado[key as keyof LeadEstado] = parsed[key]
+      const val = parsed[key]
+      if (val !== null && val !== undefined && val !== "" && val !== "null") {
+        filtrado[key as keyof LeadEstado] = val
       }
+    }
+
+    console.log("[extractor] Campos extraidos:", Object.keys(filtrado).join(", ") || "(vacío!)")
+    if (Object.keys(filtrado).length === 0) {
+      console.warn("[extractor] ALERTA: extractor devolvió todo null/vacío. Raw:", texto.substring(0, 200))
     }
 
     return filtrado
