@@ -116,7 +116,7 @@ Devolvé SOLO JSON válido, sin markdown, sin explicación:
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash-preview",
+        model: "google/gemini-2.0-flash-001",
         max_tokens: 400,
         messages: [{ role: "user", content: prompt }],
         response_format: { type: "json_object" },
