@@ -238,7 +238,7 @@ export async function generarRespuesta(
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "google/gemini-2.0-flash-001",
+        model: "anthropic/claude-3.5-haiku",
         max_tokens: 512,
         messages,
       }),
