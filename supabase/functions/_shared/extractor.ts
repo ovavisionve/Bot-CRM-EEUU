@@ -72,15 +72,18 @@ REGLAS:
 - Si el lead dice "Coral Terrace" o "coral terrace" → selected_property_name = "Coral Terrace 2BR/2BA"
 - Si dice "Flagami" → "Flagami Budget 2BR/1BA"
 - Si dice un día ("viernes", "Friday", "sabado") → tour_date = ese día
+- Si dice una hora ("a las 4", "5pm") Y tour_date ya tiene un día → COMBINAR: tour_date = "sabado 4pm" (no perder el día)
+- Si dice solo hora sin día previo → tour_date = la hora sola
 - Si dice un nombre ("Carlos Lopez") → name = "Carlos Lopez"
-- Si menciona pareja ("mi novia Maria") → partner_name = "Maria"
+- Si menciona pareja ("mi novia Maria", "mi esposa Carmen") → partner_name
 - Si dice "solo" / "alone" → occupants = "solo"
-- Si dice "con pareja" / "with partner" → occupants = "pareja"
+- Si dice "con pareja" / "con mi esposa" → occupants = "pareja"
 - Si dice un número de crédito → credit_score = ese número
 - Si responde "sí" a pregunta de crédito 620 → credit_score = 620
 - Si dice "2 cuartos" / "2BR" → preferred_unit = "2BR/2BA"
-- PRESERVAR datos previos: si un campo ya tiene valor y el mensaje nuevo no lo cambia, mantené el valor anterior
-- NUNCA borrar selected_property_name si ya estaba puesto (salvo que elija otra)
+- PRESERVAR datos previos: si un campo ya tiene valor y el mensaje nuevo no lo cambia, MANTENÉ el valor anterior exacto
+- NUNCA borrar selected_property_name si ya estaba puesto (salvo que el lead EXPLÍCITAMENTE elija otra)
+- Si el lead cambia de opinión ("mejor la de Flagami") → SÍ cambiar selected_property_name
 
 STATUS:
 - new → sin info
