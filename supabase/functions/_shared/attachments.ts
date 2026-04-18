@@ -100,7 +100,7 @@ async function analyzeImage(url: string, context?: string): Promise<string> {
         "Authorization": "Bearer " + apiKey,
       },
       body: JSON.stringify({
-        model: "google/gemini-2.0-flash-001",
+        model: "anthropic/claude-3.5-haiku",
         max_tokens: 200,
         messages: [{
           role: "user",
