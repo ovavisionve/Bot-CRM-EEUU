@@ -11,7 +11,7 @@ import {
   actualizarLead,
 } from "../_shared/db.ts"
 import { notificarAdmin } from "../_shared/notificar.ts"
-import { extraerEstadoLead } from "../_shared/extractor.ts"
+import { extraerEstadoLead, computeStatus } from "../_shared/extractor.ts"
 import { getTenantByInstagramId, getAgentConfig } from "../_shared/tenant.ts"
 import { calculateScore } from "../_shared/scoring.ts"
 import { fireWebhooks } from "../_shared/outgoing.ts"
@@ -21,7 +21,7 @@ import { processAttachments } from "../_shared/attachments.ts"
 Deno.serve(async (req) => {
   const url = new URL(req.url)
 
-  // ─── GET: Verificación de Meta ───
+  // ─── GET: Verificacion de Meta ───
   if (req.method === "GET") {
     const mode = url.searchParams.get("hub.mode")
     const token = url.searchParams.get("hub.verify_token")
@@ -30,12 +30,12 @@ Deno.serve(async (req) => {
     const expected = Deno.env.get("META_VERIFY_TOKEN")
 
     if (!expected) {
-      console.error("[webhook:GET] META_VERIFY_TOKEN no está configurado")
+      console.error("[webhook:GET] META_VERIFY_TOKEN no esta configurado")
       return new Response("Server misconfigured", { status: 500 })
     }
 
     if (mode === "subscribe" && token === expected && challenge) {
-      console.log("[webhook:GET] Verificación OK")
+      console.log("[webhook:GET] Verificacion OK")
       return new Response(challenge, {
         status: 200,
         headers: { "Content-Type": "text/plain" },
@@ -57,10 +57,8 @@ Deno.serve(async (req) => {
       }
 
       for (const entry of body.entry || []) {
-        // El entry.id es el Instagram User ID del tenant que recibe el mensaje
         const instagramUserId = String(entry.id)
 
-        // Identificar al tenant dueño de esta cuenta de Instagram
         const tenant = await getTenantByInstagramId(instagramUserId)
 
         if (!tenant) {
@@ -73,7 +71,6 @@ Deno.serve(async (req) => {
           continue
         }
 
-        // Feature gating: el bot de Instagram tiene que estar habilitado
         if (!tenant.features?.instagram_bot) {
           console.log(`[webhook:POST][${tenant.slug}] instagram_bot feature OFF`)
           continue
@@ -81,7 +78,6 @@ Deno.serve(async (req) => {
 
         const agentConfig = await getAgentConfig(tenant.id)
 
-        // Combinar ambos formatos de eventos (messaging y changes)
         const messagingEvents = entry.messaging || []
         const changesEvents = (entry.changes || [])
           .filter((c: any) => c.field === "messages" || c.field === "message_reactions")
@@ -96,7 +92,6 @@ Deno.serve(async (req) => {
           let attachmentType: string | null = null
           let attachmentUrl: string | null = null
 
-          // Procesar attachments (voice notes, imagenes)
           const atts = event.message?.attachments || []
           if (atts.length > 0 && !mensaje) {
             try {
@@ -113,7 +108,7 @@ Deno.serve(async (req) => {
           if (event.message?.is_echo) continue
           if (senderId === "12334") continue
 
-          // DEDUP: verificar si ya procesamos este mid (iPhone manda duplicados)
+          // DEDUP: verificar si ya procesamos este mid
           if (mid) {
             const { createClient: ccDedup } = await import("https://esm.sh/@supabase/supabase-js@2")
             const sbDedup = ccDedup(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!)
@@ -128,18 +123,15 @@ Deno.serve(async (req) => {
             }
           }
 
-          // DEBOUNCE: esperar 3 segundos para combinar mensajes rápidos del mismo sender
+          // DEBOUNCE: esperar 3 segundos para combinar mensajes rapidos
           await new Promise(resolve => setTimeout(resolve, 3000))
 
-          // Después del debounce, leer TODOS los mensajes recientes de este sender
-          // que no hayan sido respondidos (pueden haber llegado más mientras esperábamos)
           const { createClient: ccBatch } = await import("https://esm.sh/@supabase/supabase-js@2")
           const sbBatch = ccBatch(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!)
 
-          // Guardar ESTE mensaje primero con el mid para dedup
           await sbBatch.from("conversations").insert({
             sender_id: senderId,
-            lead_id: null, // se actualiza después
+            lead_id: null,
             tenant_id: tenant.id,
             direction: "inbound",
             message_text: mensaje,
@@ -148,7 +140,6 @@ Deno.serve(async (req) => {
             meta_message_id: mid || null,
           })
 
-          // Buscar si hay mensajes inbound recientes (últimos 5s) sin respuesta outbound después
           const { data: recentMsgs } = await sbBatch
             .from("conversations")
             .select("message_text, created_at")
@@ -158,8 +149,6 @@ Deno.serve(async (req) => {
             .gte("created_at", new Date(Date.now() - 8000).toISOString())
             .order("created_at", { ascending: true })
 
-          // Si hay más de 1 mensaje reciente, verificar si ya estamos procesando
-          // (otro webhook handler ya tomó el lote)
           const { data: recentOutbound } = await sbBatch
             .from("conversations")
             .select("created_at")
@@ -170,11 +159,10 @@ Deno.serve(async (req) => {
             .limit(1)
 
           if (recentOutbound && recentOutbound.length > 0) {
-            console.log(`[webhook:POST] Ya hay respuesta reciente para ${senderId}, skippeando (otro handler lo tomó)`)
+            console.log(`[webhook:POST] Ya hay respuesta reciente para ${senderId}, skippeando`)
             continue
           }
 
-          // Combinar todos los mensajes recientes en uno solo
           if (recentMsgs && recentMsgs.length > 1) {
             mensaje = recentMsgs.map((m: any) => m.message_text).join(". ")
             console.log(`[webhook:POST][${tenant.slug}] Combinando ${recentMsgs.length} mensajes: ${mensaje.substring(0, 100)}`)
@@ -182,25 +170,20 @@ Deno.serve(async (req) => {
 
           console.log(`[webhook:POST][${tenant.slug}] DM de ${senderId}: ${mensaje}`)
 
-          // 1. Obtener o crear lead con tenant_id
+          // 1. Obtener o crear lead
           const lead = await obtenerOCrearLead(senderId, tenant.id)
 
-          // Auto-asignar lead nuevo a un agente (round-robin) si el tenant
-          // tiene la feature auto_routing activa y el lead no esta asignado.
+          // Auto-asignar lead (round-robin)
           if (!lead.assigned_to && tenant.features?.auto_routing) {
             try {
               const { createClient: cc3 } = await import("https://esm.sh/@supabase/supabase-js@2")
-              const sb3 = cc3(
-                Deno.env.get("SUPABASE_URL")!,
-                Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-              )
+              const sb3 = cc3(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!)
               const { data: agents } = await sb3.from("user_profiles")
                 .select("id")
                 .eq("tenant_id", tenant.id)
                 .eq("active", true)
                 .in("role", ["tenant_admin", "agent"])
               if (agents && agents.length > 0) {
-                // Elegir el agente con menos leads asignados (balanceado)
                 let min = Infinity
                 let chosen: string | null = null
                 for (const a of agents) {
@@ -222,18 +205,14 @@ Deno.serve(async (req) => {
             }
           }
 
-          // Si el operador humano tomó control, no responder con IA
+          // Si el operador humano tomo control, no responder con IA
           if (lead.ai_active === false) {
             console.log(`[webhook:POST][${tenant.slug}] AI pausado para este lead`)
             await guardarMensaje(senderId, lead.id, tenant.id, mensaje, "inbound")
             continue
           }
 
-          // 2. El mensaje inbound ya se guardó arriba en el bloque de debounce/dedup
-
-          // Feature gating: handoff_to_human
-          // Si está activado y el lead usa alguna handoff keyword,
-          // pausar el bot y notificar al admin para que tome el control.
+          // Handoff to human
           if (tenant.features?.handoff_to_human) {
             const keywords = agentConfig?.handoff_keywords || [
               "hablar con persona", "hablar con alguien", "speak to agent",
@@ -244,8 +223,6 @@ Deno.serve(async (req) => {
             if (pide) {
               console.log(`[webhook:POST][${tenant.slug}] Handoff solicitado por ${senderId}`)
               await actualizarLead(senderId, tenant.id, { ai_active: false, status: "contacted" })
-
-              // Mandar un mensaje cordial al lead
               await enviarMensajesMultiples(
                 senderId,
                 [
@@ -255,7 +232,6 @@ Deno.serve(async (req) => {
                 ],
                 tenant.instagram_access_token
               )
-              // Notificar al admin si la feature está activa
               if (tenant.features?.admin_email_notifications) {
                 await notificarAdmin({
                   senderId,
@@ -265,14 +241,14 @@ Deno.serve(async (req) => {
                   tenant,
                 })
               }
-              continue // no seguir con el flujo IA
+              continue
             }
           }
 
           // 3. Historial
           const historial = await obtenerHistorial(senderId, tenant.id)
 
-          // DETECCIÓN DE LOOP: si los últimos 3 outbound son casi iguales, pausar bot
+          // DETECCION DE LOOP
           const loopCheck = historial
             .filter((m: any) => m.direction === "outbound")
             .slice(-4)
@@ -286,14 +262,14 @@ Deno.serve(async (req) => {
               console.warn(`[webhook:POST][${tenant.slug}] LOOP DETECTADO para ${senderId}, pausando bot`)
               await actualizarLead(senderId, tenant.id, { ai_active: false })
               const loopMsg = (lead.language === "es")
-                ? `Disculpa la confusión. Te paso con ${tenant.agent_name} directamente. Escríbeme al ${(tenant.agent_phone || "").replace(/[^0-9]/g, "")} por WhatsApp.`
+                ? `Disculpa la confusion. Te paso con ${tenant.agent_name} directamente. Escribeme al ${(tenant.agent_phone || "").replace(/[^0-9]/g, "")} por WhatsApp.`
                 : `Sorry for the confusion. Let me connect you with ${tenant.agent_name} directly. Text me at ${(tenant.agent_phone || "").replace(/[^0-9]/g, "")} on WhatsApp.`
               await enviarMensajesMultiples(senderId, [loopMsg], tenant.instagram_access_token)
               await guardarMensaje(senderId, lead.id, tenant.id, loopMsg, "outbound", { sent_by: "system" })
               if (tenant.features?.admin_email_notifications) {
                 await notificarAdmin({
                   senderId, leadName: lead.name || undefined,
-                  mensaje: "LOOP detectado — bot pausado automáticamente",
+                  mensaje: "LOOP detectado — bot pausado automaticamente",
                   tipo: "tour_agendado", tenant,
                 })
               }
@@ -301,11 +277,9 @@ Deno.serve(async (req) => {
             }
           }
 
-          // 4. Extraer estado estructurado (sólo si el feature está activo)
-          let nuevoEstado: Record<string, any> = {}
+          // 4. Obtener nombres de propiedades para el extractor
+          let propNames: string[] = []
           if (tenant.features?.ai_memory_extraction) {
-            // Obtener nombres de propiedades para el extractor
-            let propNames: string[] = []
             try {
               if (tenant.features?.google_sheets_properties && tenant.google_sheet_id) {
                 const { obtenerPropiedades } = await import("../_shared/sheets.ts")
@@ -313,44 +287,50 @@ Deno.serve(async (req) => {
                 propNames = props.map((p: any) => p.nombre).filter(Boolean)
               }
             } catch (_) {}
-            nuevoEstado = await extraerEstadoLead(historial, mensaje, lead, tenant, propNames)
-            if (Object.keys(nuevoEstado).length > 0) {
-              await actualizarLead(senderId, tenant.id, nuevoEstado)
-            }
           }
 
-          // 5. Generar respuesta IA (sólo si el feature está activo)
-          const leadActualizado = { ...lead, ...nuevoEstado }
-          let respuestas: string[] = []
-          if (tenant.features?.ai_responses) {
-            respuestas = await generarRespuesta(
-              mensaje,
-              historial,
-              leadActualizado,
-              tenant,
-              agentConfig
-            )
-          } else {
-            console.log(`[webhook:POST][${tenant.slug}] ai_responses feature OFF - no respondo`)
+          // 5. PARALELO: extraer estado + generar respuesta al mismo tiempo
+          const extractPromise = tenant.features?.ai_memory_extraction
+            ? extraerEstadoLead(historial, mensaje, lead, tenant, propNames)
+            : Promise.resolve({})
+
+          const leadParaGenerar = { ...lead }
+          const generatePromise = tenant.features?.ai_responses
+            ? generarRespuesta(mensaje, historial, leadParaGenerar, tenant, agentConfig)
+            : Promise.resolve([] as string[])
+
+          const [nuevoEstado, respuestas] = await Promise.all([extractPromise, generatePromise])
+
+          // 6. Computar status en codigo (no del LLM)
+          const leadMerged = { ...lead, ...nuevoEstado }
+          const computedStatus = computeStatus(leadMerged)
+          if (computedStatus !== lead.status) {
+            nuevoEstado.status = computedStatus
           }
 
-          // 6. Enviar por Instagram usando el token del tenant
+          // Guardar estado extraido + status computado
+          if (Object.keys(nuevoEstado).length > 0) {
+            await actualizarLead(senderId, tenant.id, nuevoEstado)
+          }
+
+          // 7. Enviar por Instagram
           await enviarMensajesMultiples(
             senderId,
             respuestas,
             tenant.instagram_access_token
           )
 
-          // 6b. Si el lead pidió fotos/video, enviar de la propiedad seleccionada
+          // 7b. Fotos/video de la propiedad seleccionada
           const pideFotos = /foto|fotos|image|images|picture|pictures|muestrame|muéstrame|show me|envíame|enviame|enseñame|enséñame/.test(mensaje.toLowerCase())
           const pideVideo = /video|videos|tour virtual/.test(mensaje.toLowerCase())
-          if ((pideFotos || pideVideo) && (leadActualizado.selected_property_name || nuevoEstado.selected_property_name)) {
+          if ((pideFotos || pideVideo) && (leadMerged.selected_property_name || nuevoEstado.selected_property_name)) {
             try {
               let props: any[] = []
               if (tenant.features?.google_sheets_properties && tenant.google_sheet_id) {
-                props = await obtenerPropiedades(tenant.google_sheet_id)
+                const { obtenerPropiedades: getProps } = await import("../_shared/sheets.ts")
+                props = await getProps(tenant.google_sheet_id)
               }
-              const propName = (nuevoEstado.selected_property_name || leadActualizado.selected_property_name || "").toLowerCase()
+              const propName = (nuevoEstado.selected_property_name || leadMerged.selected_property_name || "").toLowerCase()
               const elegida = props.find((p: any) => propName.includes(p.nombre.toLowerCase().split(" ")[0]))
               if (pideFotos && elegida?.foto_url) {
                 await enviarImagen(senderId, elegida.foto_url, tenant.instagram_access_token)
@@ -365,29 +345,29 @@ Deno.serve(async (req) => {
             }
           }
 
-          // 7. Guardar respuestas outbound
+          // 8. Guardar respuestas outbound
           for (const resp of respuestas) {
             await guardarMensaje(senderId, lead.id, tenant.id, resp, "outbound")
           }
 
-          // 8. Marcar último contacto del bot con el lead + calcular score si está activo
+          // 9. Marcar ultimo contacto + score
           const extraUpdates: Record<string, unknown> = {
             last_ai_message_at: new Date().toISOString(),
             last_contacted_at: new Date().toISOString(),
           }
           if (tenant.features?.lead_scoring) {
             const msgCount = historial.length + 1
-            const { score, factors } = calculateScore(leadActualizado, msgCount)
+            const { score, factors } = calculateScore(leadMerged, msgCount)
             extraUpdates.score = score
             extraUpdates.score_factors = factors
           }
           await actualizarLead(senderId, tenant.id, extraUpdates)
 
-          // 9. Si tour_calendar está ON y se confirmó tour -> crear registro en tours
+          // 10. Si tour_confirmed -> crear registro en tours
           const acabaDeConfirmarTour = (
             (nuevoEstado.status === "tour_confirmed" || nuevoEstado.tour_confirmed === true) &&
             lead.status !== "tour_confirmed" &&
-            !!leadActualizado.tour_date
+            !!leadMerged.tour_date
           )
           if (acabaDeConfirmarTour && tenant.features?.tour_calendar) {
             try {
@@ -396,19 +376,17 @@ Deno.serve(async (req) => {
                 Deno.env.get("SUPABASE_URL")!,
                 Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
               )
-              // Parsear la fecha del tour (texto libre: "sábado", "Friday 5pm", etc.)
-              let scheduled = parseTourDate(leadActualizado.tour_date)
+              let scheduled = parseTourDate(leadMerged.tour_date)
 
               const { data: newTour } = await sb.from("tours").insert({
                 tenant_id: tenant.id,
                 lead_id: lead.id,
                 scheduled_at: scheduled,
                 status: "scheduled",
-                notes: `Auto-creado por el bot. Propiedad: ${leadActualizado.selected_property_name || "N/A"}. Fecha original: ${leadActualizado.tour_date}`,
+                notes: `Auto-creado por el bot. Propiedad: ${leadMerged.selected_property_name || "N/A"}. Fecha original: ${leadMerged.tour_date}`,
               }).select().single()
               console.log(`[webhook:POST][${tenant.slug}] Tour auto-creado para ${senderId}`)
 
-              // Sync con Google Calendar si está configurado
               const calWebhook = Deno.env.get("CALENDAR_WEBHOOK_URL")
               if (newTour && calWebhook) {
                 fetch(calWebhook, {
@@ -419,8 +397,8 @@ Deno.serve(async (req) => {
                     action: "upsert",
                     tour_id: newTour.id,
                     calendar_email: tenant.agent_email,
-                    title: `Tour: ${leadActualizado.name || senderId}`,
-                    description: `Tour agendado vía OVA REAL\nLead: ${leadActualizado.name || ""}\nIG: ${senderId}\nPropiedad: ${leadActualizado.selected_property_name || ""}\nNotas: ${leadActualizado.notes || ""}`,
+                    title: `Tour: ${leadMerged.name || senderId}`,
+                    description: `Tour agendado via OVA REAL\nLead: ${leadMerged.name || ""}\nIG: ${senderId}\nPropiedad: ${leadMerged.selected_property_name || ""}\nNotas: ${leadMerged.notes || ""}`,
                     start: scheduled,
                     duration_minutes: 30,
                     status: "scheduled",
@@ -432,26 +410,24 @@ Deno.serve(async (req) => {
             }
           }
 
-          // Push notification al agente (fire-and-forget)
+          // Push notification
           sendPushToTenant(tenant.id, {
-            title: "Nuevo DM de " + (leadActualizado.name || senderId),
+            title: "Nuevo DM de " + (leadMerged.name || senderId),
             body: mensaje.substring(0, 100),
             url: "/Bot-CRM-EEUU/dashboard.html?tenant=" + tenant.slug,
             tag: "dm-" + senderId,
           }).catch(() => {})
 
-          // Outgoing webhooks (fire-and-forget)
+          // Outgoing webhooks
           const prevStatus = lead.status
           const newStatus = nuevoEstado.status || prevStatus
           fireWebhooks(tenant.id, "message.inbound", {
-            sender_id: senderId, text: mensaje, lead_id: lead.id, lead_name: leadActualizado.name,
+            sender_id: senderId, text: mensaje, lead_id: lead.id, lead_name: leadMerged.name,
           }).catch(() => {})
-          // lead.created si es nuevo (lead.id existia antes de la llamada pero created_at seria reciente)
           const isNewLead = (new Date().getTime() - new Date(lead.created_at).getTime()) < 5000
           if (isNewLead) {
-            fireWebhooks(tenant.id, "lead.created", { lead: leadActualizado }).catch(() => {})
+            fireWebhooks(tenant.id, "lead.created", { lead: leadMerged }).catch(() => {})
           }
-          // Cambios de status
           if (newStatus && newStatus !== prevStatus) {
             const statusEventMap: Record<string, string> = {
               qualified: "lead.qualified",
@@ -461,14 +437,12 @@ Deno.serve(async (req) => {
               closed_lost: "lead.closed_lost",
             }
             const evt = statusEventMap[newStatus]
-            if (evt) fireWebhooks(tenant.id, evt as any, { lead: leadActualizado }).catch(() => {})
+            if (evt) fireWebhooks(tenant.id, evt as any, { lead: leadMerged }).catch(() => {})
           }
 
-          // 10. Notificar al admin SOLO para tour_agendado (evita spam de emails)
+          // 11. Notificar admin SOLO para tour_agendado
           if (tenant.features?.admin_email_notifications) {
-            const leadName = leadActualizado.name || undefined
-
-            // Solo notificar si es un cambio GENUINO: el lead no estaba ya en tour_confirmed
+            const leadName = leadMerged.name || undefined
             const nowConfirmed = (
               nuevoEstado.status === "tour_confirmed" || nuevoEstado.tour_confirmed === true
             )
@@ -478,12 +452,11 @@ Deno.serve(async (req) => {
               await notificarAdmin({
                 senderId,
                 leadName,
-                mensaje: `Tour agendado ${leadActualizado.tour_date || ""} en ${leadActualizado.selected_property_name || ""}`,
+                mensaje: `Tour agendado ${leadMerged.tour_date || ""} en ${leadMerged.selected_property_name || ""}`,
                 tipo: "tour_agendado",
                 tenant,
               })
             } else {
-              // Loguear todos los otros eventos pero sin mandar email
               await notificarAdmin({ senderId, mensaje, tenant })
             }
           }
@@ -499,18 +472,15 @@ Deno.serve(async (req) => {
   return new Response("Method not allowed", { status: 405 })
 })
 
-// Parsear fecha de tour en texto libre ("sábado 5pm", "Friday", "viernes a las 3pm")
 function parseTourDate(text: string | null): string {
   if (!text) return new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString()
 
-  // Si es fecha ISO directa
   const direct = Date.parse(text)
   if (!isNaN(direct)) return new Date(direct).toISOString()
 
   const lower = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
   const now = new Date()
 
-  // Mapeo día de la semana → número (0=domingo)
   const dayMap: Record<string, number> = {
     domingo: 0, sunday: 0, dom: 0, sun: 0,
     lunes: 1, monday: 1, lun: 1, mon: 1,
@@ -521,13 +491,11 @@ function parseTourDate(text: string | null): string {
     sabado: 6, saturday: 6, sab: 6, sat: 6,
   }
 
-  // Buscar día de la semana en el texto
   let targetDay: number | null = null
   for (const [word, num] of Object.entries(dayMap)) {
     if (lower.includes(word)) { targetDay = num; break }
   }
 
-  // Hoy / mañana
   if (lower.includes("hoy") || lower.includes("today")) {
     targetDay = now.getDay()
   } else if (lower.includes("manana") || lower.includes("tomorrow")) {
@@ -536,33 +504,28 @@ function parseTourDate(text: string | null): string {
     targetDay = tomorrow.getDay()
   }
 
-  // Calcular el próximo día de la semana
   let date = new Date(now)
   if (targetDay !== null) {
     const currentDay = now.getDay()
     let daysAhead = targetDay - currentDay
-    if (daysAhead <= 0) daysAhead += 7 // próxima semana si ya pasó
+    if (daysAhead <= 0) daysAhead += 7
     date.setDate(now.getDate() + daysAhead)
   } else {
-    // Fallback: +3 días
     date.setDate(now.getDate() + 3)
   }
 
-  // Extraer hora si la mencionan ("5pm", "3pm", "a las 2")
-  // IMPORTANTE: asumir hora local de Miami (EDT = UTC-4 en verano, EST = UTC-5 en invierno)
-  // Abril-Octubre = EDT (UTC-4), Noviembre-Marzo = EST (UTC-5)
-  const month = date.getMonth() // 0-indexed
-  const tzOffset = (month >= 2 && month <= 10) ? 4 : 5 // EDT abril-oct, EST nov-mar
+  const month = date.getMonth()
+  const tzOffset = (month >= 2 && month <= 10) ? 4 : 5
 
   const hourMatch = lower.match(/(\d{1,2})\s*(pm|am|p\.m\.|a\.m\.)?/)
   if (hourMatch) {
     let hour = parseInt(hourMatch[1])
     const isPM = hourMatch[2]?.startsWith("p")
     if (isPM && hour < 12) hour += 12
-    if (!hourMatch[2] && hour < 8) hour += 12 // asumir PM si dice "3" sin am/pm
-    date.setUTCHours(hour + tzOffset, 0, 0, 0) // convertir hora local a UTC
+    if (!hourMatch[2] && hour < 8) hour += 12
+    date.setUTCHours(hour + tzOffset, 0, 0, 0)
   } else {
-    date.setUTCHours(14 + tzOffset, 0, 0, 0) // default 2pm local
+    date.setUTCHours(14 + tzOffset, 0, 0, 0)
   }
 
   return date.toISOString()

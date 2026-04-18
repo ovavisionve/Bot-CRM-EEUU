@@ -7,7 +7,7 @@ import { generarRespuesta } from "../_shared/respuestas.ts"
 import { enviarSMS } from "../_shared/twilio.ts"
 import { obtenerOCrearLead, guardarMensaje, obtenerHistorial, actualizarLead } from "../_shared/db.ts"
 import { notificarAdmin } from "../_shared/notificar.ts"
-import { extraerEstadoLead } from "../_shared/extractor.ts"
+import { extraerEstadoLead, computeStatus } from "../_shared/extractor.ts"
 import { getAgentConfig } from "../_shared/tenant.ts"
 
 function getClient() {
@@ -80,10 +80,15 @@ Deno.serve(async (req) => {
     const nuevoEstado = tenant.features?.ai_memory_extraction
       ? await extraerEstadoLead(historial, body, lead, tenant)
       : {}
+    const leadMerged = { ...lead, ...nuevoEstado }
+    const computedStatus = computeStatus(leadMerged)
+    if (computedStatus !== lead.status) {
+      nuevoEstado.status = computedStatus
+    }
     if (Object.keys(nuevoEstado).length > 0) {
       await actualizarLead(senderId, tenant.id, nuevoEstado)
     }
-    const leadActualizado = { ...lead, ...nuevoEstado }
+    const leadActualizado = leadMerged
 
     if (!tenant.features?.ai_responses) {
       return new Response("<Response></Response>", {
