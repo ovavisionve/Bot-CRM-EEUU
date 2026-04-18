@@ -224,7 +224,7 @@ Return ONLY valid JSON, no markdown, no explanation:
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "anthropic/claude-3.5-haiku",
+        model: "deepseek/deepseek-chat-v3-0324",
         max_tokens: 500,
         temperature: 0,
         messages: [{ role: "user", content: prompt }],
