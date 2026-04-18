@@ -118,23 +118,30 @@ export async function obtenerPropiedades(sheetId?: string | null): Promise<Propi
   }
 }
 
-// Formatea las propiedades para incluir en el prompt del bot
+// Formatea las propiedades en 2 secciones: básica (siempre visible) + detalles (solo si preguntan)
 export function formatearPropiedadesParaPrompt(propiedades: Propiedad[]): string {
-  if (propiedades.length === 0) {
-    return "No hay propiedades disponibles en este momento."
+  if (propiedades.length === 0) return "No hay propiedades disponibles."
+
+  let basica = "LISTA DE PROPIEDADES (presentá SOLO esto al lead):\n"
+  let detalles = "\nDETALLES DE CADA PROPIEDAD (SOLO compartir si el lead PREGUNTA por fees, parking o detalles):\n"
+
+  for (const p of propiedades) {
+    // Sección básica: solo nombre + dirección + precio
+    basica += `- ${p.nombre}: ${p.direccion}`
+    if (p.habitaciones && p.banos) basica += ` (${p.habitaciones}BR/${p.banos}BA)`
+    if (p.precio) basica += ` — $${p.precio}/mes`
+    basica += "\n"
+
+    // Sección detalles: fees, parking, promos, notas (SOLO si preguntan)
+    const detLines: string[] = []
+    if (p.fees) detLines.push("Fees: $" + p.fees + (p.fees_incluye ? " (" + p.fees_incluye + ")" : ""))
+    if (p.parking) detLines.push("Parking: " + p.parking)
+    if (p.promociones) detLines.push("Promo: " + p.promociones)
+    if (p.notas) detLines.push("Nota: " + p.notas)
+    if (detLines.length > 0) {
+      detalles += `${p.nombre}: ${detLines.join(". ")}\n`
+    }
   }
 
-  return propiedades
-    .map((p) => {
-      let texto = `- ${p.nombre}: ${p.direccion}`
-      if (p.habitaciones && p.banos) texto += ` (${p.habitaciones}BR/${p.banos}BA)`
-      if (p.precio) texto += `\n  Price: $${p.precio}/mo`
-      if (p.fees) texto += ` + $${p.fees} fees`
-      if (p.fees_incluye) texto += ` (${p.fees_incluye})`
-      if (p.parking) texto += `\n  Parking: ${p.parking}`
-      if (p.promociones) texto += `\n  Promotion: ${p.promociones}`
-      if (p.notas) texto += `\n  Notes: ${p.notas}`
-      return texto
-    })
-    .join("\n\n")
+  return basica + detalles
 }
